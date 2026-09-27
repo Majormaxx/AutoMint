@@ -3,7 +3,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Bytes, Env,
-    String, Vec,
+    IntoVal, String, Vec,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -67,18 +67,43 @@ impl BotTier {
     }
 }
 
+/// Typed tier descriptor returned by `get_tier_info` and `all_tiers`.
+#[derive(Clone)]
+#[contracttype]
+pub struct TierInfo {
+    pub name: String,
+    pub rate: u64,
+    pub price: i128,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct BotNFT {
     pub id: u64,
     pub tier: BotTier,
     pub owner: Address,
+    pub minter: Address,
     pub accrual_rate: u64,
     pub minted_at: u64,
-    pub name: String,
+    /// Owner-settable nickname (max 24 bytes). None when unset; callers that
+    /// need a display name fall back to `tier.name()`.
+    pub nickname: Option<String>,
     /// Deterministic variant (0..=7) assigned at mint, used for rarity.
     pub variant: u32,
     /// Deterministic bonus bps (0..500) on top of the tier base accrual rate.
+    pub bonus_bps: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct StoredBotNFT {
+    pub id: u64,
+    pub tier: BotTier,
+    pub owner: Address,
+    pub minter: Address,
+    pub minted_at: u64,
+    pub nickname: Option<String>,
+    pub variant: u32,
     pub bonus_bps: u32,
 }
 
@@ -92,6 +117,11 @@ pub enum DataKey {
     Initialized,
     Registry,
     TierSupply(BotTier),
+    TierRate(BotTier),
+    Marketplace,
+    Accrual,
+    PaymentToken,
+    TierIndex(BotTier),
 }
 
 #[contracterror]
@@ -107,26 +137,38 @@ pub enum BotNFTError {
     NotInitialized = 8,
     SupplyCapExceeded = 9,
     BatchTooLarge = 10,
+    NicknameTooLong = 11,
+    RangeLimitExceeded = 12,
+    /// `withdraw` amount was zero or negative.
+    InvalidAmount = 13,
+    /// `withdraw` amount exceeds the treasury balance of the payment token.
+    InsufficientTreasury = 14,
 }
 
 const LEDGER_BUMP: u32 = 120960;
 const LEDGER_THRESHOLD: u32 = 103680;
 /// Maximum number of bots that may be minted per tier (supply cap).
 const MAX_TIER_SUPPLY: u64 = 50;
+/// Maximum number of free Basic bots a single account may mint.
+const MAX_BASIC_BOTS_PER_ACCOUNT: u64 = 1;
 /// Maximum number of recipients in a single admin_mint_batch call.
 const MAX_BATCH_SIZE: u64 = 50;
+/// Maximum number of bots returned per page when querying by tier (#398).
+pub const TIER_PAGE_SIZE: u32 = 10;
 /// Maximum number of bots returned by a single `get_user_bots_detailed` call.
 /// The cap is enforced contract-side so one simulation stays within the
 /// compute budget; callers with more bots paginate via `get_user_bots` +
 /// `get_bot` (#483).
 const MAX_DETAILED_BOTS: usize = 50;
+/// Maximum `limit` accepted by `get_bots_range` (#391).
+const MAX_RANGE_LIMIT: u32 = 100;
 
 #[contract]
 pub struct BotNFTContract;
 
 #[contractimpl]
 impl BotNFTContract {
-    pub fn initialize(env: Env, admin: Address, registry: Address) -> Result<(), BotNFTError> {
+    pub fn initialize(env: Env, admin: Address, registry: Address, payment_token: Address) -> Result<(), BotNFTError> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(BotNFTError::AlreadyInitialized);
         }
@@ -136,10 +178,83 @@ impl BotNFTContract {
         env.storage().instance().set(&DataKey::NextId, &1u64);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Registry, &registry);
+        env.storage().instance().set(&DataKey::PaymentToken, &payment_token);
+
+        env.storage().instance().set(&DataKey::TierRate(BotTier::Basic), &1u64);
+        env.storage().instance().set(&DataKey::TierRate(BotTier::Bronze), &5u64);
+        env.storage().instance().set(&DataKey::TierRate(BotTier::Silver), &25u64);
+        env.storage().instance().set(&DataKey::TierRate(BotTier::Gold), &100u64);
+        env.storage().instance().set(&DataKey::TierRate(BotTier::Diamond), &500u64);
+
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
+    }
+
+    pub fn set_accrual(env: Env, accrual: Address) -> Result<(), BotNFTError> {
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(BotNFTError::NotInitialized)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Accrual, &accrual);
+        Ok(())
+    }
+
+    pub fn payment_token(env: Env) -> Result<Address, BotNFTError> {
+        env.storage().instance().get(&DataKey::PaymentToken).ok_or(BotNFTError::NotInitialized)
+    }
+
+    pub fn set_marketplace(env: Env, marketplace: Address) -> Result<(), BotNFTError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(BotNFTError::NotInitialized)?;
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Marketplace, &marketplace);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
+    }
+
+    pub fn set_tier_rate(env: Env, tier: BotTier, rate: u64) -> Result<(), BotNFTError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(BotNFTError::NotInitialized)?;
+        admin.require_auth();
+
+        if rate == 0 {
+            return Err(BotNFTError::InvalidTier);
+        }
+
+        let old_rate = Self::get_tier_rate_internal(&env, tier);
+
+        let max_allowed = old_rate.saturating_mul(2);
+        let min_allowed = old_rate / 2;
+        if rate > max_allowed || (min_allowed > 0 && rate < min_allowed) {
+            return Err(BotNFTError::Unauthorized);
+        }
+
+        env.storage().instance().set(&DataKey::TierRate(tier), &rate);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        env.events().publish(
+            (symbol_short!("rate_set"), tier),
+            (old_rate, rate),
+        );
+        Ok(())
+    }
+
+    fn get_tier_rate_internal(env: &Env, tier: BotTier) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::TierRate(tier))
+            .unwrap_or_else(|| tier.rate())
     }
 
     pub fn mint_basic(env: Env, owner: Address) -> Result<u64, BotNFTError> {
@@ -147,6 +262,22 @@ impl BotNFTContract {
             return Err(BotNFTError::NotInitialized);
         }
         owner.require_auth();
+
+        // Enforce per-account limit on free Basic bots
+        let user_bots = Self::get_user_bots(env.clone(), owner.clone());
+        let basic_count = user_bots
+            .iter()
+            .filter(|bot_id| {
+                Self::get_bot(env.clone(), *bot_id)
+                    .map(|bot| bot.tier == BotTier::Basic)
+                    .unwrap_or(false)
+            })
+            .count();
+
+        if basic_count as u64 >= MAX_BASIC_BOTS_PER_ACCOUNT {
+            return Err(BotNFTError::SupplyCapExceeded);
+        }
+
         Self::do_mint(&env, &owner, BotTier::Basic, false)
     }
 
@@ -154,7 +285,6 @@ impl BotNFTContract {
         env: Env,
         owner: Address,
         tier: Tier,
-        token: Address,
     ) -> Result<u64, BotNFTError> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(BotNFTError::NotInitialized);
@@ -164,6 +294,7 @@ impl BotNFTContract {
         // Charge the purchase price (transfer fails on insufficient balance).
         let price = tier.price();
         if price > 0 {
+            let token = Self::payment_token(env.clone())?;
             let token_client = token::Client::new(&env, &token);
             token_client.transfer(&owner, &env.current_contract_address(), &price);
         }
@@ -174,6 +305,44 @@ impl BotNFTContract {
             Tier::Premium => BotTier::Silver,
         };
         Self::do_mint(&env, &owner, bot_tier, false)
+    }
+
+    /// Admin-only withdrawal of accumulated tier payments (#322).
+    ///
+    /// `mint_tier` takes the payment token as a per-call argument (no token is
+    /// stored yet), so the token to withdraw is passed explicitly. The balance
+    /// is checked up front so an over-withdrawal fails before any transfer.
+    pub fn withdraw(
+        env: Env,
+        token: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), BotNFTError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(BotNFTError::NotInitialized)?;
+        admin.require_auth();
+
+        if amount <= 0 {
+            return Err(BotNFTError::InvalidAmount);
+        }
+        let token_client = token::Client::new(&env, &token);
+        let this = env.current_contract_address();
+        if amount > token_client.balance(&this) {
+            return Err(BotNFTError::InsufficientTreasury);
+        }
+        token_client.transfer(&this, &to, &amount);
+
+        env.events()
+            .publish((symbol_short!("withdraw"),), (admin, to, amount));
+        Ok(())
+    }
+
+    /// Balance of `token` held by this contract (accumulated tier payments).
+    pub fn treasury_balance(env: Env, token: Address) -> i128 {
+        token::Client::new(&env, &token).balance(&env.current_contract_address())
     }
 
     /// Admin-controlled mint (no payment) for airdrops / grants. Distinguishable
@@ -220,19 +389,15 @@ impl BotNFTContract {
         is_grant: bool,
     ) -> Result<u64, BotNFTError> {
         let bot_id = Self::get_next_id(env);
-        let name = tier.name(env);
         let (variant, bonus_bps) =
             Self::derive_traits(env, bot_id, env.ledger().timestamp(), owner);
-        // Effective accrual rate = base rate + deterministic bonus.
-        let base = tier.rate();
-        let effective = base.saturating_add(base.saturating_mul(bonus_bps as u64) / 10000);
-        let bot = BotNFT {
+        let stored = StoredBotNFT {
             id: bot_id,
             tier,
             owner: owner.clone(),
-            accrual_rate: effective,
+            minter: owner.clone(),
             minted_at: env.ledger().timestamp(),
-            name,
+            nickname: None,
             variant,
             bonus_bps,
         };
@@ -245,14 +410,24 @@ impl BotNFTContract {
         env.storage()
             .persistent()
             .set(&DataKey::TierSupply(tier), &supply);
+        env.storage().persistent().extend_ttl(
+            &DataKey::TierSupply(tier),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
 
-        env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
+        env.storage().persistent().set(&DataKey::Bot(bot_id), &stored);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
 
         Self::add_bot_to_user(env, owner, bot_id);
-        Self::increment_bot_count(env, owner);
+        Self::add_bot_to_tier_index(env, tier, bot_id);
+        Self::increment_bot_count(env, owner, bot_id);
+
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let topic = if is_grant {
             symbol_short!("grant")
@@ -260,7 +435,17 @@ impl BotNFTContract {
             symbol_short!("mint")
         };
         env.events().publish((topic, owner.clone()), (bot_id, tier));
+        Self::sync_rate(env, owner);
         Ok(bot_id)
+    }
+
+    fn sync_rate(env: &Env, user: &Address) {
+        if let Some(accrual) = env.storage().instance().get::<_, Address>(&DataKey::Accrual) {
+            let mut args = Vec::new(env);
+            args.push_back(user.clone().into_val(env));
+            let _ = env.try_invoke_contract::<soroban_sdk::Val, soroban_sdk::Error>(
+                &accrual, &soroban_sdk::Symbol::new(env, "sync_rate"), args);
+        }
     }
 
     pub fn transfer(env: Env, bot_id: u64, from: Address, to: Address) -> Result<(), BotNFTError> {
@@ -268,57 +453,226 @@ impl BotNFTContract {
         if from == to {
             return Ok(());
         }
-        let mut bot: BotNFT = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Bot(bot_id))
-            .ok_or(BotNFTError::BotNotFound)?;
+        let bot: BotNFT = Self::get_bot(env.clone(), bot_id)?;
 
         if bot.owner != from {
             return Err(BotNFTError::NotOwner);
         }
 
-        bot.owner = to.clone();
-        env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
-        // #544: `set` alone does not refresh a persistent entry's TTL once
-        // it's past the extend-TTL threshold — without this, a bot that
-        // changes hands close to its expiry ledger (but is never minted
-        // again) could still silently archive out from under its new
-        // owner. Explicitly bump it on every ownership change, matching
-        // every other write path in this contract.
+        let stored = StoredBotNFT {
+            id: bot.id,
+            tier: bot.tier,
+            owner: to.clone(),
+            minter: bot.minter,
+            minted_at: bot.minted_at,
+            nickname: bot.nickname,
+            variant: bot.variant,
+            bonus_bps: bot.bonus_bps,
+        };
+        env.storage().persistent().set(&DataKey::Bot(bot_id), &stored);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
-        // Also keep the contract instance itself alive on write activity —
-        // mirrors `registry::register`, which bumps its own instance TTL on
-        // every write, not just at `initialize`.
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Self::remove_bot_from_user(&env, &from, bot_id);
         Self::add_bot_to_user(&env, &to, bot_id);
+        Self::sync_rate(&env, &from);
+        Self::sync_rate(&env, &to);
+
+        if let Some(mkt_addr) = env.storage().instance().get::<_, Address>(&DataKey::Marketplace) {
+            if to != mkt_addr {
+                let mut args = Vec::new(&env);
+                args.push_back(bot_id.into_val(&env));
+                let _ = env.try_invoke_contract::<(), soroban_sdk::Error>(
+                    &mkt_addr,
+                    &soroban_sdk::Symbol::new(&env, "on_bot_moved"),
+                    args,
+                );
+            }
+        }
 
         env.events()
             .publish((symbol_short!("transfer"), from, to.clone()), bot_id);
         Ok(())
     }
 
-    pub fn get_bot(env: Env, bot_id: u64) -> Result<BotNFT, BotNFTError> {
+    /// Burn a bot, removing it from storage, decrementing tier supply,
+    /// removing it from owner's bot list and tier index, and decrementing the owner's
+    /// count in the registry contract (#398).
+    pub fn burn(env: Env, bot_id: u64, owner: Address) -> Result<(), BotNFTError> {
+        owner.require_auth();
+        let bot: BotNFT = Self::get_bot(env.clone(), bot_id)?;
+
+        if bot.owner != owner {
+            return Err(BotNFTError::NotOwner);
+        }
+
+        let supply = Self::tier_supply(&env, bot.tier);
+        env.storage().persistent().set(
+            &DataKey::TierSupply(bot.tier),
+            &supply.saturating_sub(1),
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::TierSupply(bot.tier),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        env.storage().persistent().remove(&DataKey::Bot(bot_id));
+
+        Self::remove_bot_from_user(&env, &owner, bot_id);
+        Self::remove_bot_from_tier_index(&env, bot.tier, bot_id);
+        Self::decrement_bot_count(&env, &owner, bot_id);
+
         env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        env.events()
+            .publish((symbol_short!("burn"), owner), (bot_id, bot.tier));
+        Ok(())
+    }
+
+    /// Permissionlessly refresh the persistent storage TTL of a single bot (#397).
+    pub fn bump_bot(env: Env, bot_id: u64) -> Result<(), BotNFTError> {
+        if !env.storage().persistent().has(&DataKey::Bot(bot_id)) {
+            return Err(BotNFTError::BotNotFound);
+        }
+        env.storage().persistent().extend_ttl(
+            &DataKey::Bot(bot_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
+    }
+
+    /// Permissionlessly refresh the persistent storage TTL of a user's bot list
+    /// and all bots owned by that user (#397).
+    pub fn bump_user_bots(env: Env, user: Address) -> Result<(), BotNFTError> {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::UserBots(user.clone()))
+        {
+            return Err(BotNFTError::NotFound);
+        }
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserBots(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        let bots = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<u64>>(&DataKey::UserBots(user))
+            .unwrap_or_else(|| Vec::new(&env));
+        for bot_id in bots.iter() {
+            if env.storage().persistent().has(&DataKey::Bot(bot_id)) {
+                env.storage().persistent().extend_ttl(
+                    &DataKey::Bot(bot_id),
+                    LEDGER_THRESHOLD,
+                    LEDGER_BUMP,
+                );
+            }
+        }
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
+    }
+
+    /// Return a page of bot IDs for a specific tier (#398).
+    ///
+    /// Paged in buckets of `TIER_PAGE_SIZE` (10). Bounded to guarantee predictable
+    /// simulation cost without client-side N+1 filtering.
+    pub fn get_bots_by_tier(env: Env, tier: BotTier, page: u32) -> Vec<u64> {
+        let list = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<u64>>(&DataKey::TierIndex(tier))
+            .unwrap_or_else(|| Vec::new(&env));
+        let start = page.saturating_mul(TIER_PAGE_SIZE) as usize;
+        let mut result = Vec::new(&env);
+        let len = list.len() as usize;
+        if start >= len {
+            return result;
+        }
+        let end = (start + TIER_PAGE_SIZE as usize).min(len);
+        for i in start..end {
+            if let Some(id) = list.get(i as u32) {
+                result.push_back(id);
+            }
+        }
+        result
+    }
+
+    pub fn get_bot(env: Env, bot_id: u64) -> Result<BotNFT, BotNFTError> {
+        let stored: StoredBotNFT = match env.storage().persistent().get(&DataKey::Bot(bot_id)) {
+            Some(s) => s,
+            None => {
+                if let Some(b) = env.storage().persistent().get::<_, BotNFT>(&DataKey::Bot(bot_id)) {
+                    StoredBotNFT {
+                        id: b.id,
+                        tier: b.tier,
+                        owner: b.owner,
+                        minter: b.minter,
+                        minted_at: b.minted_at,
+                        nickname: b.nickname,
+                        variant: b.variant,
+                        bonus_bps: b.bonus_bps,
+                    }
+                } else {
+                    return Err(BotNFTError::BotNotFound);
+                }
+            }
+        };
+
+        let base_rate = Self::get_tier_rate_internal(&env, stored.tier);
+        let effective_rate = base_rate.saturating_add(base_rate.saturating_mul(stored.bonus_bps as u64) / 10000);
+
+        Ok(BotNFT {
+            id: stored.id,
+            tier: stored.tier,
+            owner: stored.owner,
+            minter: stored.minter,
+            accrual_rate: effective_rate,
+            minted_at: stored.minted_at,
+            nickname: stored.nickname,
+            variant: stored.variant,
+            bonus_bps: stored.bonus_bps,
+        })
+    }
+
+    /// Set or clear the owner-chosen nickname for a bot. Max 24 bytes; pass
+    /// an empty string to clear. Only the current owner may rename.
+    pub fn rename_bot(env: Env, bot_id: u64, name: String) -> Result<(), BotNFTError> {
+        let mut bot: BotNFT = env
+            .storage()
             .persistent()
             .get(&DataKey::Bot(bot_id))
-            .ok_or(BotNFTError::BotNotFound)
+            .ok_or(BotNFTError::BotNotFound)?;
+        bot.owner.require_auth();
+        if name.len() > 24 {
+            return Err(BotNFTError::NicknameTooLong);
+        }
+        bot.nickname = if name.len() == 0 { None } else { Some(name) };
+        env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
     }
 
     /// Off-chain verifiable descriptor. The traits are derived deterministically
     /// from sha256(bot_id, minted_at, owner); this URI exposes the derivation
     /// inputs so anyone can recompute `variant`/`bonus_bps` and confirm rarity.
     pub fn token_uri(env: Env, bot_id: u64) -> Result<String, BotNFTError> {
-        let bot: BotNFT = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Bot(bot_id))
-            .ok_or(BotNFTError::BotNotFound)?;
+        let bot: BotNFT = Self::get_bot(env.clone(), bot_id)?;
         let owner_str = bot.owner.to_string();
         let mut buf = Bytes::new(&env);
         buf.append(&Bytes::from_slice(&env, b"ipfs://automint/bot/"));
@@ -394,7 +748,7 @@ impl BotNFTContract {
     }
 
     pub fn get_tier_info(env: Env, tier: BotTier) -> (String, u64, i128) {
-        (tier.name(&env), tier.rate(), tier.price())
+        (tier.name(&env), Self::get_tier_rate_internal(&env, tier), tier.price())
     }
 
     fn get_next_id(env: &Env) -> u64 {
@@ -490,15 +844,85 @@ impl BotNFTContract {
             .ok_or(BotNFTError::NotInitialized)
     }
 
-    fn increment_bot_count(env: &Env, user: &Address) {
+    fn add_bot_to_tier_index(env: &Env, tier: BotTier, bot_id: u64) {
+        let mut list = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<u64>>(&DataKey::TierIndex(tier))
+            .unwrap_or_else(|| Vec::new(env));
+        list.push_back(bot_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TierIndex(tier), &list);
+        env.storage().persistent().extend_ttl(
+            &DataKey::TierIndex(tier),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+    }
+
+    fn remove_bot_from_tier_index(env: &Env, tier: BotTier, bot_id: u64) {
+        let list = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<u64>>(&DataKey::TierIndex(tier))
+            .unwrap_or_else(|| Vec::new(env));
+        let mut new_list = Vec::new(env);
+        for id in list.iter() {
+            if id != bot_id {
+                new_list.push_back(id);
+            }
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::TierIndex(tier), &new_list);
+        env.storage().persistent().extend_ttl(
+            &DataKey::TierIndex(tier),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+    }
+
+    fn increment_bot_count(env: &Env, user: &Address, bot_id: u64) {
         let registry: Address = match env.storage().instance().get(&DataKey::Registry) {
             Some(r) => r,
-            None => return,
+            None => {
+                env.events().publish(
+                    (symbol_short!("regfail"), user.clone()),
+                    (bot_id, symbol_short!("unset")),
+                );
+                return;
+            }
         };
         let reg_client = automint_registry::RegistryContractClient::new(env, &registry);
         // Use the fallible client so a registry-side error (e.g. the owner is
-        // not registered yet) is swallowed rather than panicking the mint.
-        let _ = reg_client.try_increment_bot_count(user);
+        // not registered yet) is swallowed rather than panicking the flow (#399).
+        if reg_client.try_increment_bot_count(user).is_err() {
+            env.events().publish(
+                (symbol_short!("regfail"), user.clone()),
+                (bot_id, symbol_short!("incfail")),
+            );
+        }
+    }
+
+    fn decrement_bot_count(env: &Env, user: &Address, bot_id: u64) {
+        let registry: Address = match env.storage().instance().get(&DataKey::Registry) {
+            Some(r) => r,
+            None => {
+                env.events().publish(
+                    (symbol_short!("regfail"), user.clone()),
+                    (bot_id, symbol_short!("unset")),
+                );
+                return;
+            }
+        };
+        let reg_client = automint_registry::RegistryContractClient::new(env, &registry);
+        if reg_client.try_decrement_bot_count(user).is_err() {
+            env.events().publish(
+                (symbol_short!("regfail"), user.clone()),
+                (bot_id, symbol_short!("decfail")),
+            );
+        }
     }
 }
 
@@ -670,9 +1094,9 @@ mod test {
             25 + 25 * premium_bot.bonus_bps as u64 / 10000
         );
 
-        assert_eq!(basic_bot.name, String::from_str(&env, "Basic Bot"));
-        assert_eq!(advanced_bot.name, String::from_str(&env, "Bronze Bot"));
-        assert_eq!(premium_bot.name, String::from_str(&env, "Silver Bot"));
+        assert_eq!(basic_bot.nickname, None);
+        assert_eq!(advanced_bot.nickname, None);
+        assert_eq!(premium_bot.nickname, None);
 
         assert_eq!(basic_bot.tier, BotTier::Basic);
         assert_eq!(advanced_bot.tier, BotTier::Bronze);
@@ -930,6 +1354,77 @@ mod test {
         assert_eq!(client.get_user_total_rate(&bob), 1);
     }
 
+    // --- #391: get_bots_range / next_id ---
+
+    #[test]
+    fn test_next_id_starts_at_one_before_any_mint() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        // setup() mints one bot (id=1), so next_id should be 2.
+        assert_eq!(client.next_id(), 2);
+    }
+
+    #[test]
+    fn test_get_bots_range_returns_existing_bots_in_order() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        // setup() already minted id=1; mint two more.
+        client.mint_basic(&user);
+        client.mint_basic(&user);
+        // IDs 1, 2, 3 now exist.
+        let bots = client.get_bots_range(&1, &3).unwrap();
+        assert_eq!(bots.len(), 3);
+        assert_eq!(bots.get(0).unwrap().id, 1);
+        assert_eq!(bots.get(1).unwrap().id, 2);
+        assert_eq!(bots.get(2).unwrap().id, 3);
+    }
+
+    #[test]
+    fn test_get_bots_range_skips_gaps() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        client.mint_basic(&user); // id=2
+        client.mint_basic(&user); // id=3
+        // Ask for ids 1..=5; id 4 and 5 don't exist yet — should be silently skipped.
+        let bots = client.get_bots_range(&1, &5).unwrap();
+        assert_eq!(bots.len(), 3);
+        assert_eq!(bots.get(0).unwrap().id, 1);
+        assert_eq!(bots.get(2).unwrap().id, 3);
+    }
+
+    #[test]
+    fn test_get_bots_range_empty_when_no_bots_in_window() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        // start beyond any minted id.
+        let bots = client.get_bots_range(&1000, &10).unwrap();
+        assert_eq!(bots.len(), 0);
+    }
+
+    #[test]
+    fn test_get_bots_range_over_cap_returns_error() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        let result = client.try_get_bots_range(&1, &101);
+        assert!(matches!(result, Err(Ok(BotNFTError::RangeLimitExceeded))));
+    }
+
+    #[test]
+    fn test_get_bots_range_exactly_at_cap_succeeds() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        let result = client.try_get_bots_range(&1, &100);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_next_id_advances_with_each_mint() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        let before = client.next_id();
+        client.mint_basic(&user);
+        assert_eq!(client.next_id(), before + 1);
+    }
+
     #[test]
     fn test_admin_returns_initialized_admin() {
         let (_env, admin, _registry, _token, client) = setup();
@@ -989,10 +1484,10 @@ mod test {
     fn test_get_tier_info() {
         let (env, _admin, _registry, _token, client) = setup();
 
-        assert_eq!(
-            client.get_tier_info(&BotTier::Gold),
-            (String::from_str(&env, "Gold Bot"), 100, 7500_0000000)
-        );
+        let info = client.get_tier_info(&BotTier::Gold);
+        assert_eq!(info.name, String::from_str(&env, "Gold Bot"));
+        assert_eq!(info.rate, 100);
+        assert_eq!(info.price, 7500_0000000);
     }
 
     #[test]
@@ -1030,6 +1525,71 @@ mod test {
         assert_eq!(BotNFTError::NotOwner as u32, 6);
         assert_eq!(BotNFTError::InsufficientFunds as u32, 7);
         assert_eq!(BotNFTError::NotInitialized as u32, 8);
+        assert_eq!(BotNFTError::NicknameTooLong as u32, 11);
+    }
+
+    #[test]
+    fn test_rename_bot_sets_nickname() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "owner");
+        let bot_id = client.mint_basic(&user);
+
+        assert_eq!(client.get_bot(&bot_id).nickname, None);
+
+        client.rename_bot(&bot_id, &String::from_str(&env, "Sparky"));
+        assert_eq!(
+            client.get_bot(&bot_id).nickname,
+            Some(String::from_str(&env, "Sparky"))
+        );
+    }
+
+    #[test]
+    fn test_rename_bot_clears_with_empty_string() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "owner");
+        let bot_id = client.mint_basic(&user);
+
+        client.rename_bot(&bot_id, &String::from_str(&env, "Temp"));
+        client.rename_bot(&bot_id, &String::from_str(&env, ""));
+        assert_eq!(client.get_bot(&bot_id).nickname, None);
+    }
+
+    #[test]
+    fn test_rename_bot_rejects_oversized_name() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "owner");
+        let bot_id = client.mint_basic(&user);
+
+        // 25 bytes — one over the limit.
+        let too_long = String::from_str(&env, "AAAAAAAAAAAAAAAAAAAAAAAAA");
+        let result = client.try_rename_bot(&bot_id, &too_long);
+        assert!(matches!(result, Err(Ok(BotNFTError::NicknameTooLong))));
+    }
+
+    #[test]
+    fn test_rename_bot_rejects_non_owner() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        register_user(&env, &registry, &bob, "bob");
+        let bot_id = client.mint_basic(&alice);
+
+        let result = client
+            .mock_auths(&[MockAuth {
+                address: &bob,
+                invoke: &MockAuthInvoke {
+                    contract: &client.address,
+                    fn_name: "rename_bot",
+                    args: (bot_id, String::from_str(&env, "Hacked")).into_val(&env),
+                    sub_invokes: &[],
+                },
+            }])
+            .try_rename_bot(&bot_id, &String::from_str(&env, "Hacked"));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1132,29 +1692,51 @@ mod test {
         let (env, _admin, _registry, _token, client) = setup();
 
         let basic = client.get_tier_info(&BotTier::Basic);
-        assert_eq!(basic.0, String::from_str(&env, "Basic Bot"));
-        assert_eq!(basic.1, 1);
-        assert_eq!(basic.2, 0);
+        assert_eq!(basic.name, String::from_str(&env, "Basic Bot"));
+        assert_eq!(basic.rate, 1);
+        assert_eq!(basic.price, 0);
 
         let bronze = client.get_tier_info(&BotTier::Bronze);
-        assert_eq!(bronze.0, String::from_str(&env, "Bronze Bot"));
-        assert_eq!(bronze.1, 5);
-        assert_eq!(bronze.2, 500_0000000);
+        assert_eq!(bronze.name, String::from_str(&env, "Bronze Bot"));
+        assert_eq!(bronze.rate, 5);
+        assert_eq!(bronze.price, 500_0000000);
 
         let silver = client.get_tier_info(&BotTier::Silver);
-        assert_eq!(silver.0, String::from_str(&env, "Silver Bot"));
-        assert_eq!(silver.1, 25);
-        assert_eq!(silver.2, 2000_0000000);
+        assert_eq!(silver.name, String::from_str(&env, "Silver Bot"));
+        assert_eq!(silver.rate, 25);
+        assert_eq!(silver.price, 2000_0000000);
 
         let gold = client.get_tier_info(&BotTier::Gold);
-        assert_eq!(gold.0, String::from_str(&env, "Gold Bot"));
-        assert_eq!(gold.1, 100);
-        assert_eq!(gold.2, 7500_0000000);
+        assert_eq!(gold.name, String::from_str(&env, "Gold Bot"));
+        assert_eq!(gold.rate, 100);
+        assert_eq!(gold.price, 7500_0000000);
 
         let diamond = client.get_tier_info(&BotTier::Diamond);
-        assert_eq!(diamond.0, String::from_str(&env, "Diamond Bot"));
-        assert_eq!(diamond.1, 500);
-        assert_eq!(diamond.2, 25000_0000000);
+        assert_eq!(diamond.name, String::from_str(&env, "Diamond Bot"));
+        assert_eq!(diamond.rate, 500);
+        assert_eq!(diamond.price, 25000_0000000);
+    }
+
+    #[test]
+    fn test_all_tiers() {
+        let (env, _admin, _registry, _token, client) = setup();
+
+        let all = client.all_tiers();
+        assert_eq!(all.len(), 5);
+
+        let basic = all.get(0).unwrap();
+        assert_eq!(basic.name, String::from_str(&env, "Basic Bot"));
+        assert_eq!(basic.rate, 1);
+        assert_eq!(basic.price, 0);
+
+        let bronze = all.get(1).unwrap();
+        assert_eq!(bronze.name, String::from_str(&env, "Bronze Bot"));
+        assert_eq!(bronze.rate, 5);
+
+        let diamond = all.get(4).unwrap();
+        assert_eq!(diamond.name, String::from_str(&env, "Diamond Bot"));
+        assert_eq!(diamond.rate, 500);
+        assert_eq!(diamond.price, 25000_0000000);
     }
 
     // --- Issue #544: storage TTL / archival coverage ---
@@ -1233,6 +1815,178 @@ mod test {
 
         let bot = client.get_bot(&bot_id);
         assert_eq!(bot.owner, bob);
+    }
+
+    // --- Issue #397: permissionless bump_bot and bump_user_bots ---
+
+    #[test]
+    fn test_bot_bump_prevents_archival_after_threshold() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        let bot_id = client.mint_basic(&alice);
+
+        // Control case: advancing past TTL without bumping archives the bot entry.
+        let env_expired = env.clone();
+        automint_testutils::advance_past_ttl(&env_expired, LEDGER_BUMP);
+        let expired_outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| client.get_bot(&bot_id)));
+        assert!(expired_outcome.is_err(), "expected unbumped entry to be archived");
+
+        // Fresh case: advance near expiry, call bump_bot, advance past original expiry -> still accessible.
+        let (env2, _admin, registry2, _token, client2) = setup();
+        let bob = Address::generate(&env2);
+        register_user(&env2, &registry2, &bob, "bob");
+        let bot_id2 = client2.mint_basic(&bob);
+
+        automint_testutils::advance_ledger(&env2, LEDGER_BUMP - 1);
+        client2.bump_bot(&bot_id2);
+
+        automint_testutils::advance_ledger(&env2, LEDGER_BUMP / 2);
+        let bot2 = client2.get_bot(&bot_id2);
+        assert_eq!(bot2.owner, bob);
+
+        // Also verify bump_user_bots prevents archival of both the user list and bots.
+        let (env3, _admin, registry3, _token, client3) = setup();
+        let charlie = Address::generate(&env3);
+        register_user(&env3, &registry3, &charlie, "charlie");
+        let bot_id3 = client3.mint_basic(&charlie);
+
+        automint_testutils::advance_ledger(&env3, LEDGER_BUMP - 1);
+        client3.bump_user_bots(&charlie);
+
+        automint_testutils::advance_ledger(&env3, LEDGER_BUMP / 2);
+        let bot_user = client3.get_bot(&bot_id3);
+        assert_eq!(bot_user.owner, charlie);
+        assert_eq!(client3.get_user_bots(&charlie).len(), 1);
+    }
+
+    #[test]
+    fn test_bump_bot_nonexistent_fails() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        let result = client.try_bump_bot(&999);
+        assert_eq!(result, Err(Ok(BotNFTError::BotNotFound)));
+    }
+
+    #[test]
+    fn test_bump_user_bots_nonexistent_fails() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let ghost = Address::generate(&env);
+        let result = client.try_bump_user_bots(&ghost);
+        assert_eq!(result, Err(Ok(BotNFTError::NotFound)));
+    }
+
+    // --- Issue #398: get_bots_by_tier indexing & paging ---
+
+    #[test]
+    fn test_get_bots_by_tier_pagination_and_bounds() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "diamond_collector");
+
+        // Mint 25 bots of Diamond tier
+        for _ in 0..25 {
+            client.admin_mint(&user, &BotTier::Diamond);
+        }
+
+        // Page 0: exactly TIER_PAGE_SIZE (10) bots
+        let page0 = client.get_bots_by_tier(&BotTier::Diamond, &0);
+        assert_eq!(page0.len(), TIER_PAGE_SIZE);
+        assert_eq!(page0.get(0), Some(1));
+        assert_eq!(page0.get(9), Some(10));
+
+        // Page 1: exactly TIER_PAGE_SIZE (10) bots
+        let page1 = client.get_bots_by_tier(&BotTier::Diamond, &1);
+        assert_eq!(page1.len(), TIER_PAGE_SIZE);
+        assert_eq!(page1.get(0), Some(11));
+        assert_eq!(page1.get(9), Some(20));
+
+        // Page 2: remaining 5 bots
+        let page2 = client.get_bots_by_tier(&BotTier::Diamond, &2);
+        assert_eq!(page2.len(), 5);
+        assert_eq!(page2.get(0), Some(21));
+        assert_eq!(page2.get(4), Some(25));
+
+        // Page 3: beyond total -> empty
+        let page3 = client.get_bots_by_tier(&BotTier::Diamond, &3);
+        assert_eq!(page3.len(), 0);
+    }
+
+    #[test]
+    fn test_tier_index_unaffected_by_transfer() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        register_user(&env, &registry, &bob, "bob");
+
+        let id1 = client.admin_mint(&alice, &BotTier::Gold);
+        let id2 = client.admin_mint(&alice, &BotTier::Gold);
+
+        let before = client.get_bots_by_tier(&BotTier::Gold, &0);
+        assert_eq!(before.len(), 2);
+        assert_eq!(before.get(0), Some(id1));
+        assert_eq!(before.get(1), Some(id2));
+
+        // Transfer id1 from Alice to Bob
+        client.transfer(&id1, &alice, &bob);
+
+        // Tier index is strictly updated on mint and burn, NEVER on transfer
+        let after = client.get_bots_by_tier(&BotTier::Gold, &0);
+        assert_eq!(after.len(), 2);
+        assert_eq!(after.get(0), Some(id1));
+        assert_eq!(after.get(1), Some(id2));
+    }
+
+    #[test]
+    fn test_tier_index_consistent_across_mint_burn_and_transfer() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        register_user(&env, &registry, &bob, "bob");
+
+        let b1 = client.admin_mint(&alice, &BotTier::Bronze);
+        let b2 = client.admin_mint(&alice, &BotTier::Bronze);
+        let b3 = client.admin_mint(&bob, &BotTier::Bronze);
+
+        // Transfer b2 from Alice to Bob
+        client.transfer(&b2, &alice, &bob);
+        let list_after_transfer = client.get_bots_by_tier(&BotTier::Bronze, &0);
+        assert_eq!(list_after_transfer.len(), 3);
+        assert_eq!(list_after_transfer.get(0), Some(b1));
+        assert_eq!(list_after_transfer.get(1), Some(b2));
+        assert_eq!(list_after_transfer.get(2), Some(b3));
+
+        // Burn b2 by Bob
+        client.burn(&b2, &bob);
+
+        let list_after_burn = client.get_bots_by_tier(&BotTier::Bronze, &0);
+        assert_eq!(list_after_burn.len(), 2);
+        assert_eq!(list_after_burn.get(0), Some(b1));
+        assert_eq!(list_after_burn.get(1), Some(b3));
+        assert!(client.try_get_bot(&b2).is_err());
+    }
+
+    #[test]
+    fn test_burn_not_owner_fails() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        register_user(&env, &registry, &bob, "bob");
+
+        let id = client.mint_basic(&alice);
+        let result = client.try_burn(&id, &bob);
+        assert_eq!(result, Err(Ok(BotNFTError::NotOwner)));
+    }
+
+    #[test]
+    fn test_burn_nonexistent_bot_fails() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let result = client.try_burn(&999, &alice);
+        assert_eq!(result, Err(Ok(BotNFTError::BotNotFound)));
     }
 }
 
@@ -1418,5 +2172,346 @@ mod auth_tests {
         }]);
         let result = client.try_transfer(&bot_id, &owner, &to);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_tier_rate_updates_get_user_total_rate_immediately() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let alice = Address::generate(&env);
+        let bot_id = client.mint_basic(&alice);
+        let bot = client.get_bot(&bot_id);
+        let bonus = bot.bonus_bps as u64;
+
+        let rate1 = client.get_user_total_rate(&alice);
+        assert_eq!(rate1, 1 + (1 * bonus / 10000));
+
+        // Change Basic tier rate from 1 to 2
+        client.set_tier_rate(&BotTier::Basic, &2_u64);
+
+        let rate2 = client.get_user_total_rate(&alice);
+        assert_eq!(rate2, 2 + (2 * bonus / 10000));
+    }
+
+    #[test]
+    fn test_set_tier_rate_bounded_change_enforced() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        // Base rate for Basic tier is 1, max allowed 2x is 2. Setting to 5 should fail.
+        let result = client.try_set_tier_rate(&BotTier::Basic, &5_u64);
+        assert_eq!(result, Err(Ok(BotNFTError::Unauthorized)));
+    }
+
+    #[test]
+    fn test_burn_fails_without_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+        let owner = Address::generate(&env);
+        let bot_id = client.mint_basic(&owner);
+
+        env.mock_auths(&[]);
+        let result = client.try_burn(&bot_id, &owner);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_burn_succeeds_with_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+        let owner = Address::generate(&env);
+        let bot_id = client.mint_basic(&owner);
+
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "burn",
+                args: (bot_id, owner.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_burn(&bot_id, &owner);
+        assert!(result.is_ok());
+    }
+}
+
+// ── Issue #399: cross-contract registry failure mode tests ────────────────
+//
+// These tests exercise all failure paths in the Bot NFT <-> Registry interaction:
+// 1. mint with no registry configured (DataKey::Registry unset)
+// 2. mint where the owner is unregistered in Registry
+// 3. transfer between one registered and one unregistered party (both directions)
+// 4. registry paused / access restricted mid-flow
+// Each scenario asserts:
+// - the bot state is correct and operations succeed
+// - the registry state is verified
+// - the regfail event described in AM-012 is emitted
+#[cfg(test)]
+mod registry_cross_contract_tests {
+    use super::*;
+    use automint_testutils::{deploy_all, register_user};
+    use soroban_sdk::{
+        contract, contractimpl,
+        testutils::{Address as _, Events},
+        Address, Env,
+    };
+
+    #[contract]
+    struct PausedRegistryContract;
+
+    #[contractimpl]
+    impl PausedRegistryContract {
+        pub fn increment_bot_count(
+            _env: Env,
+            _user: Address,
+        ) -> Result<(), automint_registry::RegistryError> {
+            Err(automint_registry::RegistryError::Unauthorized)
+        }
+    }
+
+    fn assert_regfail_emitted(env: &Env, user: &Address) {
+        use soroban_sdk::{Symbol, TryFromVal};
+        let regfail_sym = symbol_short!("regfail");
+        let all_events = env.events().all();
+        let found = all_events.iter().any(|(_, topics, _)| {
+            if topics.len() < 2 {
+                return false;
+            }
+            let Ok(t0) = Symbol::try_from_val(env, &topics.get(0).unwrap()) else {
+                return false;
+            };
+            let Ok(t1) = Address::try_from_val(env, &topics.get(1).unwrap()) else {
+                return false;
+            };
+            t0 == regfail_sym && t1 == *user
+        });
+        assert!(found, "expected regfail event to be emitted for user");
+    }
+
+    #[test]
+    fn test_mint_no_registry_configured() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        let user = Address::generate(&env);
+
+        // Initialize BotNFT contract instance without configuring DataKey::Registry
+        env.as_contract(&id, || {
+            env.storage().instance().set(&DataKey::Admin, &admin);
+            env.storage().instance().set(&DataKey::Initialized, &true);
+            env.storage().instance().set(&DataKey::NextId, &1u64);
+        });
+
+        let bot_id = client.mint_basic(&user);
+
+        // Assert bot state
+        assert_eq!(bot_id, 1);
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, user);
+        assert_eq!(bot.tier, BotTier::Basic);
+        assert_eq!(client.get_user_bots(&user).len(), 1);
+
+        // Assert regfail event was emitted
+        assert_regfail_emitted(&env, &user);
+    }
+
+    #[test]
+    fn test_mint_unregistered_owner() {
+        let deployment = deploy_all(Env::default());
+        let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+        let reg_client =
+            automint_registry::RegistryContractClient::new(&deployment.env, &deployment.registry_id);
+        let user = Address::generate(&deployment.env);
+
+        // Ensure user is unregistered in registry
+        assert!(!reg_client.is_registered(&user));
+
+        let bot_id = client.mint_basic(&user);
+
+        // Assert bot state is valid and intact
+        assert_eq!(bot_id, 1);
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, user);
+        assert_eq!(client.get_user_bots(&user).len(), 1);
+
+        // Assert registry state: user remains unregistered
+        assert!(!reg_client.is_registered(&user));
+
+        // Assert regfail event emitted
+        assert_regfail_emitted(&deployment.env, &user);
+    }
+
+    #[test]
+    fn test_transfer_registered_to_unregistered() {
+        let deployment = deploy_all(Env::default());
+        let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+        let reg_client =
+            automint_registry::RegistryContractClient::new(&deployment.env, &deployment.registry_id);
+
+        let alice = Address::generate(&deployment.env);
+        let bob = Address::generate(&deployment.env);
+
+        // Alice is registered, Bob is unregistered
+        register_user(&deployment.env, &deployment.registry_id, &alice, "alice");
+        assert!(!reg_client.is_registered(&bob));
+
+        let bot_id = client.mint_basic(&alice);
+        assert_eq!(reg_client.get_user(&alice).bot_count, 1);
+
+        // Transfer from Alice (registered) to Bob (unregistered)
+        client.transfer(&bot_id, &alice, &bob);
+
+        // Assert bot state
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, bob);
+        assert_eq!(client.get_user_bots(&alice).len(), 0);
+        assert_eq!(client.get_user_bots(&bob).len(), 1);
+
+        // Assert registry state: Alice's mint count remains 1, Bob remains unregistered
+        assert_eq!(reg_client.get_user(&alice).bot_count, 1);
+        assert!(!reg_client.is_registered(&bob));
+    }
+
+    #[test]
+    fn test_transfer_unregistered_to_registered() {
+        let deployment = deploy_all(Env::default());
+        let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+        let reg_client =
+            automint_registry::RegistryContractClient::new(&deployment.env, &deployment.registry_id);
+
+        let bob = Address::generate(&deployment.env);
+        let alice = Address::generate(&deployment.env);
+
+        // Bob is unregistered, Alice is registered
+        register_user(&deployment.env, &deployment.registry_id, &alice, "alice");
+        assert!(!reg_client.is_registered(&bob));
+
+        // Bob mints as unregistered user -> emits regfail
+        let bot_id = client.mint_basic(&bob);
+        assert_regfail_emitted(&deployment.env, &bob);
+
+        // Transfer from Bob (unregistered) to Alice (registered)
+        client.transfer(&bot_id, &bob, &alice);
+
+        // Assert bot state
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, alice);
+        assert_eq!(client.get_user_bots(&bob).len(), 0);
+        assert_eq!(client.get_user_bots(&alice).len(), 1);
+
+        // Assert registry state: Bob remains unregistered, Alice's mint count remains 0
+        assert!(!reg_client.is_registered(&bob));
+        assert_eq!(reg_client.get_user(&alice).bot_count, 0);
+    }
+
+    #[test]
+    fn test_registry_paused_mid_flow() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let paused_reg_id = env.register_contract(None, PausedRegistryContract);
+
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin, &paused_reg_id);
+
+        let alice = Address::generate(&env);
+
+        // Mint bot while registry is paused / returning Unauthorized
+        let bot_id = client.mint_basic(&alice);
+
+        // Assert bot state: successfully minted despite registry failure
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, alice);
+        assert_eq!(bot.id, bot_id);
+        assert_eq!(client.get_user_bots(&alice).len(), 1);
+
+        // Assert regfail event was emitted
+        assert_regfail_emitted(&env, &alice);
+    }
+
+    // #322: tier payments can be withdrawn by the admin.
+    #[test]
+    fn test_withdraw_full_treasury_after_priced_mint() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        let to = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        let price = Tier::Advanced.price();
+        fund_user(&env, &token, &user, price);
+        client.mint_tier(&user, &Tier::Advanced, &token);
+        assert_eq!(client.treasury_balance(&token), price);
+
+        client.withdraw(&token, &to, &price);
+        assert_eq!(client.treasury_balance(&token), 0);
+        let tc = automint_token::AMTTokenClient::new(&env, &token);
+        assert_eq!(tc.balance(&to), price);
+    }
+
+    #[test]
+    fn test_withdraw_rejects_bad_amounts_without_partial_transfer() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        let to = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        let price = Tier::Advanced.price();
+        fund_user(&env, &token, &user, price);
+        client.mint_tier(&user, &Tier::Advanced, &token);
+
+        assert_eq!(
+            client.try_withdraw(&token, &to, &0),
+            Err(Ok(BotNFTError::InvalidAmount))
+        );
+        assert_eq!(
+            client.try_withdraw(&token, &to, &-5),
+            Err(Ok(BotNFTError::InvalidAmount))
+        );
+        assert_eq!(
+            client.try_withdraw(&token, &to, &(price + 1)),
+            Err(Ok(BotNFTError::InsufficientTreasury))
+        );
+        assert_eq!(client.treasury_balance(&token), price);
+        let tc = automint_token::AMTTokenClient::new(&env, &token);
+        assert_eq!(tc.balance(&to), 0);
+    }
+
+    #[test]
+    fn test_withdraw_requires_admin_auth() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        let to = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        let price = Tier::Advanced.price();
+        fund_user(&env, &token, &user, price);
+        client.mint_tier(&user, &Tier::Advanced, &token);
+
+        // No auths mocked: admin.require_auth() must fail the call.
+        env.mock_auths(&[]);
+        assert!(client.try_withdraw(&token, &to, &price).is_err());
+        assert_eq!(client.treasury_balance(&token), price);
     }
 }

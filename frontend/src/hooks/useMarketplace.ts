@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getActiveListings, getUserListings } from "@/lib/contracts";
+import {
+  getActiveListings,
+  getUserListings,
+  getMarketStats,
+  buildListBotArgs,
+} from "@/lib/contracts";
 import { executeTransaction, type TransactionStatus } from "@/lib/transaction";
 import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { nativeToScVal, xdr } from "@stellar/stellar-sdk";
@@ -187,6 +192,17 @@ export function useListings() {
   });
 }
 
+/** Per-tier sales statistics: volume, sale count, last sale price and floor (#432). */
+export function useMarketStats() {
+  return useQuery({
+    queryKey: qk.marketStats(),
+    queryFn: () => getMarketStats(),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME.SHORT,
+  });
+}
+
 export function useMyListings() {
   const publicKey = useWalletStore(selectPublicKey);
 
@@ -215,10 +231,10 @@ export function useListBot() {
         executeTransaction({
           contractId: MARKETPLACE_CONTRACT_ID,
           method: "list_bot",
-          args: [
-            nativeToScVal(botId, { type: "u128" }),
-            nativeToScVal(price, { type: "u128" }),
-          ],
+          // list_bot(seller, bot_id, price, currency): the connected wallet is
+          // the seller whose auth the contract requires; currency is the
+          // configured payment token.
+          args: buildListBotArgs(publicKey, botId, price),
           sourceAddress: publicKey,
           onStatus: (status: TransactionStatus) => {
             trackStatus(txId, "Listing", status);

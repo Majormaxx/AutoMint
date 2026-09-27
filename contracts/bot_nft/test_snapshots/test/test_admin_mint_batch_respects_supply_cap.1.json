@@ -3168,14 +3168,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -3276,14 +3268,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -3388,14 +3372,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -3496,14 +3472,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -3608,14 +3576,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -3716,14 +3676,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -3828,14 +3780,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -3936,14 +3880,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -4048,14 +3984,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4156,14 +4084,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -4268,14 +4188,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4376,14 +4288,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -4488,14 +4392,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4596,14 +4492,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -4708,14 +4596,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4816,14 +4696,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -4928,14 +4800,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5036,14 +4900,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -5148,14 +5004,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5256,14 +5104,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -5368,14 +5208,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5476,14 +5308,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -5588,14 +5412,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5696,14 +5512,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -5808,14 +5616,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5916,14 +5716,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -6028,14 +5820,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6136,14 +5920,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -6248,14 +6024,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6356,14 +6124,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -6468,14 +6228,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6576,14 +6328,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -6688,14 +6432,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6796,14 +6532,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -6908,14 +6636,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -7016,14 +6736,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -7128,14 +6840,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -7236,14 +6940,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -7348,14 +7044,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -7456,14 +7144,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -7568,14 +7248,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -7676,14 +7348,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -7788,14 +7452,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -7896,14 +7552,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -8008,14 +7656,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -8116,14 +7756,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -8228,14 +7860,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -8336,14 +7960,6 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
-                    {
-                      "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
                     {
                       "key": {
                         "symbol": "bonus_bps"
@@ -8448,14 +8064,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -8558,14 +8166,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -8636,6 +8236,202 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "TierIndex"
+                },
+                {
+                  "u32": 0
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "TierIndex"
+                    },
+                    {
+                      "u32": 0
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "u64": 1
+                    },
+                    {
+                      "u64": 2
+                    },
+                    {
+                      "u64": 3
+                    },
+                    {
+                      "u64": 4
+                    },
+                    {
+                      "u64": 5
+                    },
+                    {
+                      "u64": 6
+                    },
+                    {
+                      "u64": 7
+                    },
+                    {
+                      "u64": 8
+                    },
+                    {
+                      "u64": 9
+                    },
+                    {
+                      "u64": 10
+                    },
+                    {
+                      "u64": 11
+                    },
+                    {
+                      "u64": 12
+                    },
+                    {
+                      "u64": 13
+                    },
+                    {
+                      "u64": 14
+                    },
+                    {
+                      "u64": 15
+                    },
+                    {
+                      "u64": 16
+                    },
+                    {
+                      "u64": 17
+                    },
+                    {
+                      "u64": 18
+                    },
+                    {
+                      "u64": 19
+                    },
+                    {
+                      "u64": 20
+                    },
+                    {
+                      "u64": 21
+                    },
+                    {
+                      "u64": 22
+                    },
+                    {
+                      "u64": 23
+                    },
+                    {
+                      "u64": 24
+                    },
+                    {
+                      "u64": 25
+                    },
+                    {
+                      "u64": 26
+                    },
+                    {
+                      "u64": 27
+                    },
+                    {
+                      "u64": 28
+                    },
+                    {
+                      "u64": 29
+                    },
+                    {
+                      "u64": 30
+                    },
+                    {
+                      "u64": 31
+                    },
+                    {
+                      "u64": 32
+                    },
+                    {
+                      "u64": 33
+                    },
+                    {
+                      "u64": 34
+                    },
+                    {
+                      "u64": 35
+                    },
+                    {
+                      "u64": 36
+                    },
+                    {
+                      "u64": 37
+                    },
+                    {
+                      "u64": 38
+                    },
+                    {
+                      "u64": 39
+                    },
+                    {
+                      "u64": 40
+                    },
+                    {
+                      "u64": 41
+                    },
+                    {
+                      "u64": 42
+                    },
+                    {
+                      "u64": 43
+                    },
+                    {
+                      "u64": 44
+                    },
+                    {
+                      "u64": 45
+                    },
+                    {
+                      "u64": 46
+                    },
+                    {
+                      "u64": 47
+                    },
+                    {
+                      "u64": 48
+                    },
+                    {
+                      "u64": 49
+                    },
+                    {
+                      "u64": 50
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          120960
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
                   "symbol": "TierSupply"
                 },
                 {
@@ -8671,7 +8467,7 @@
             },
             "ext": "v0"
           },
-          4095
+          120960
         ]
       ],
       [
@@ -11194,6 +10990,81 @@
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 0
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 1
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 1
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 5
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 2
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 25
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 3
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 100
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 4
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 500
+                        }
                       }
                     ]
                   }
@@ -11447,6 +11318,18 @@
                         },
                         "val": {
                           "bool": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ListingCap"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 50
                         }
                       },
                       {
@@ -11750,6 +11633,53 @@
       "event": {
         "ext": "v0",
         "contract_id": "0000000000000000000000000000000000000000000000000000000000000006",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000003"
+              },
+              {
+                "symbol": "admin"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "admin"
+              }
+            ],
+            "data": {
+              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000006",
         "type_": "contract",
         "body": {
           "v0": {
@@ -11937,6 +11867,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 1
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -12155,6 +12115,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 2
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -12339,6 +12329,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 3
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -12557,6 +12577,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVAX5"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 4
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -12741,6 +12791,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 5
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -12959,6 +13039,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 6
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -13143,6 +13253,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 7
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -13361,6 +13501,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4BV5"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 8
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -13545,6 +13715,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6J5N"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6J5N"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 9
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -13763,6 +13963,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABB6KO"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 10
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -13947,6 +14177,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDWC6"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDWC6"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 11
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -14165,6 +14425,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFO3O"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 12
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -14349,6 +14639,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 13
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -14567,6 +14887,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABI7IO"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 14
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -14751,6 +15101,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABKXA6"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABKXA6"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 15
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -14969,6 +15349,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMPZO"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 16
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -15153,6 +15563,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOHR6"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOHR6"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 17
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -15371,6 +15811,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABR4OP"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 18
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -15555,6 +16025,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTUG7"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTUG7"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 19
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -15773,6 +16273,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVM7P"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 20
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -15957,6 +16487,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXEX7"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXEX7"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 21
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -16175,6 +16735,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABY5MP"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 22
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -16359,6 +16949,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB2VE7"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB2VE7"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 23
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -16577,6 +17197,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4N5P"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 24
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -16761,6 +17411,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB6FV7"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB6FV7"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 25
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -16979,6 +17659,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACBKTY"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 26
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -17163,6 +17873,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACDC3I"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACDC3I"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 27
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -17381,6 +18121,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACF2CY"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 28
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -17565,6 +18335,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHSKI"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHSKI"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 29
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -17783,6 +18583,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACILRY"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 30
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -17967,6 +18797,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKDZI"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKDZI"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 31
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -18185,6 +19045,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACM3AY"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 32
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -18369,6 +19259,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACOTII"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACOTII"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 33
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -18587,6 +19507,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRIXZ"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 34
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -18771,6 +19721,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACTA7J"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACTA7J"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 35
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -18989,6 +19969,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACVYGZ"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 36
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -19173,6 +20183,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACXQOJ"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACXQOJ"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 37
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -19391,6 +20431,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACYJVZ"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 38
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -19575,6 +20645,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC2B5J"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC2B5J"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 39
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -19793,6 +20893,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC4ZEZ"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 40
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -19977,6 +21107,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC6RMJ"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC6RMJ"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 41
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -20195,6 +21355,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADBG3K"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 42
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -20379,6 +21569,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADDOT2"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADDOT2"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 43
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -20597,6 +21817,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADFWKK"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 44
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -20781,6 +22031,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADH6C2"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADH6C2"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 45
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -20999,6 +22279,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADIHZK"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 46
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -21183,6 +22493,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADKPR2"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADKPR2"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 47
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }
@@ -21401,6 +22741,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADMXIK"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 48
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -21602,6 +22972,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADO7A2"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 49
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "grant"
               },
               {
@@ -21786,6 +23186,36 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADRE7L"
                     }
                   ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADRE7L"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 50
+                },
+                {
+                  "symbol": "incfail"
                 }
               ]
             }

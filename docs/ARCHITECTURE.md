@@ -153,6 +153,7 @@ The table below specifies the required authentication signer, verification mecha
 | | `start_accrual` | User | `user.require_auth()` | Starts rate tracking at current ledger time |
 | | `pending_points` | None | Public view | Calculates `(elapsed * rate) / 3600` |
 | | `get_accrual_state` | None | Public view | Queries user's last claim time & points |
+| | `get_accrual_states` | None | Public view | Accrual states for up to 50 users in one call (`None` for unknown users) |
 | | `claim` | User | `user.require_auth()` | Claims pending points & triggers mint if >= 100 |
 | | `config` | None | Public view | Returns contract configuration |
 | | `admin` | None | Public view | Returns contract admin address |
@@ -163,6 +164,10 @@ The table below specifies the required authentication signer, verification mecha
 | | `get_active_listings` | None | Public view | Paginated query of active listings |
 | | `get_user_listings` | None | Public view | Fetch all listings created by user |
 | | `buy_bot` | Buyer | `buyer.require_auth()` | Transfers NFT to buyer & payments to seller/admin |
+| | `update_price` | Seller | `seller.require_auth()` | Changes an active listing's price |
+| | `propose_admin` / `accept_admin` | Admin / New admin | `require_auth()` | Two-step admin transfer |
+| | `pause` / `unpause` | Admin | `admin.require_auth()` | Blocks/resumes `list_bot`, `buy_bot`, `update_price`; `cancel_listing` always works |
+| | `tier_stats` / `market_stats` | None | Public view | Per-tier volume, sale count, last sale price and floor |
 | | `config` | None | Public view | Returns contract configuration |
 | **AMT Token** | `initialize` | Admin | `admin.require_auth()` | Sets decimals (7), name, symbol, admin |
 | | `allowance` | None | Public view | Returns non-expired allowance amount |
@@ -295,7 +300,7 @@ flowchart TD
     subgraph Contract Initialization Order
         Step4 --> I1["Registry.initialize(admin)"]
         I1 --> I2["BotNFT.initialize(admin, registry_id)"]
-        I2 --> I3["Accrual.initialize(admin, points_per_amt=100)"]
+        I2 --> I3["Accrual.initialize(admin, bot_nft_id, registry_id, points_per_amt=100)"]
         I3 --> I4["Marketplace.initialize(admin, bot_nft_id, fee_bps=250)"]
         I4 --> I5["Token.initialize(admin, decimals=7, name, symbol)"]
     end
@@ -316,7 +321,7 @@ flowchart TD
 4. **Initialize Contracts**:
    - `stellar contract invoke --id $REGISTRY_ID -- initialize --admin $ADMIN_ADDRESS`
    - `stellar contract invoke --id $BOT_NFT_ID -- initialize --admin $ADMIN_ADDRESS --registry $REGISTRY_ID`
-   - `stellar contract invoke --id $ACCRUAL_ID -- initialize --admin $ADMIN_ADDRESS --points_per_amt 100`
+    - `stellar contract invoke --id $ACCRUAL_ID -- initialize --admin $ADMIN_ADDRESS --bot-nft $BOT_NFT_ID --registry $REGISTRY_ID --points-per-amt 100`
    - `stellar contract invoke --id $MARKETPLACE_ID -- initialize --admin $ADMIN_ADDRESS --bot-nft $BOT_NFT_ID --fee-bps 250`
    - `stellar contract invoke --id $TOKEN_ID -- initialize --admin $ADMIN_ADDRESS --decimal 7 --name "AutoMint Token" --symbol "AMT"`
 5. **Export Environment Variables**:

@@ -79,6 +79,7 @@ export const qk = {
     botIds.map(String).join(","),
   ],
   accrualState: (address: string | null): QueryKey => ["accrualState", address],
+  accrualConfig: (): QueryKey => ["accrualConfig"],
   amtBalance: (address: string | null): QueryKey => ["amtBalance", address],
   amtDecimals: (): QueryKey => ["amtDecimals"],
   tiers: (): QueryKey => ["tiers"],
@@ -86,4 +87,9 @@ export const qk = {
   listings: (): QueryKey => ["listings"],
   myListings: (address: string | null): QueryKey => ["myListings", address],
   leaderboard: (limit: number): QueryKey => ["leaderboard", limit],
+  leaderboardAccruals: (addresses: string[]): QueryKey => [
+    "leaderboardAccruals",
+    addresses.join(","),
+  ],
+  marketStats: (): QueryKey => ["marketStats"],
 } as const;

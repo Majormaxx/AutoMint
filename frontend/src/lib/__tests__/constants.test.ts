@@ -30,7 +30,6 @@ describe("constants.ts", () => {
       delete process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID;
       delete process.env.NEXT_PUBLIC_TX_TIMEOUT;
       delete process.env.NEXT_PUBLIC_BASE_FEE;
-      delete process.env.NEXT_PUBLIC_POINTS_PER_AMT;
       delete process.env.NEXT_PUBLIC_LEADERBOARD_LIMIT;
       delete process.env.NEXT_PUBLIC_POLL_INTERVAL_MS;
       delete process.env.NEXT_PUBLIC_COUNTER_TICK_MS;
@@ -49,36 +48,20 @@ describe("constants.ts", () => {
 
     it("resolves default contract IDs and CONTRACT_ADDRESSES mapping", () => {
       const constants = require("../constants");
-      expect(constants.REGISTRY_CONTRACT_ID).toBe(
-        "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX01"
-      );
-      expect(constants.BOT_NFT_CONTRACT_ID).toBe(
-        "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX02"
-      );
-      expect(constants.ACCRUAL_CONTRACT_ID).toBe(
-        "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX03"
-      );
-      expect(constants.MARKETPLACE_CONTRACT_ID).toBe(
-        "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX04"
-      );
-      expect(constants.TOKEN_CONTRACT_ID).toBe(
-        "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX05"
-      );
-
       expect(constants.CONTRACT_ADDRESSES).toEqual({
-        registry: constants.REGISTRY_CONTRACT_ID,
-        botNft: constants.BOT_NFT_CONTRACT_ID,
-        accrual: constants.ACCRUAL_CONTRACT_ID,
-        marketplace: constants.MARKETPLACE_CONTRACT_ID,
-        token: constants.TOKEN_CONTRACT_ID,
+        registry: "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX01",
+        botNft: "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX02",
+        accrual: "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX03",
+        marketplace: "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX04",
+        token: "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX05",
       });
+      expect(constants.REGISTRY_CONTRACT_ID).toBeUndefined();
     });
 
     it("resolves default numeric tunables, fees, and intervals", () => {
       const constants = require("../constants");
       expect(constants.TX_TIMEOUT).toBe(30);
       expect(constants.BASE_FEE).toBe("100");
-      expect(constants.POINTS_PER_AMT).toBe(1000);
       expect(constants.LEADERBOARD_LIMIT).toBe(50);
       expect(constants.POLL_INTERVAL_MS).toBe(1000);
       expect(constants.COUNTER_TICK_MS).toBe(1000);
@@ -98,7 +81,6 @@ describe("constants.ts", () => {
       process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID = "CATOKEN1234567890";
       process.env.NEXT_PUBLIC_TX_TIMEOUT = "60";
       process.env.NEXT_PUBLIC_BASE_FEE = "200";
-      process.env.NEXT_PUBLIC_POINTS_PER_AMT = "500";
       process.env.NEXT_PUBLIC_LEADERBOARD_LIMIT = "100";
       process.env.NEXT_PUBLIC_POLL_INTERVAL_MS = "2500";
       process.env.NEXT_PUBLIC_COUNTER_TICK_MS = "500";
@@ -151,12 +133,6 @@ describe("constants.ts", () => {
 
     it("resolves custom contract IDs and updates CONTRACT_ADDRESSES mapping", () => {
       const constants = require("../constants");
-      expect(constants.REGISTRY_CONTRACT_ID).toBe("CAREGISTRY1234567890");
-      expect(constants.BOT_NFT_CONTRACT_ID).toBe("CABOTNFT1234567890");
-      expect(constants.ACCRUAL_CONTRACT_ID).toBe("CAACCRUAL1234567890");
-      expect(constants.MARKETPLACE_CONTRACT_ID).toBe("CAMARKETPLACE1234567890");
-      expect(constants.TOKEN_CONTRACT_ID).toBe("CATOKEN1234567890");
-
       expect(constants.CONTRACT_ADDRESSES).toEqual({
         registry: "CAREGISTRY1234567890",
         botNft: "CABOTNFT1234567890",
@@ -170,7 +146,6 @@ describe("constants.ts", () => {
       const constants = require("../constants");
       expect(constants.TX_TIMEOUT).toBe(60);
       expect(constants.BASE_FEE).toBe("200");
-      expect(constants.POINTS_PER_AMT).toBe(500);
       expect(constants.LEADERBOARD_LIMIT).toBe(100);
       expect(constants.POLL_INTERVAL_MS).toBe(2500);
       expect(constants.COUNTER_TICK_MS).toBe(500);
@@ -178,14 +153,12 @@ describe("constants.ts", () => {
 
     it("handles invalid or non-numeric environment values by falling back", () => {
       process.env.NEXT_PUBLIC_TX_TIMEOUT = "invalid-timeout";
-      process.env.NEXT_PUBLIC_POINTS_PER_AMT = "not-a-number";
       process.env.NEXT_PUBLIC_LEADERBOARD_LIMIT = "";
       process.env.NEXT_PUBLIC_POLL_INTERVAL_MS = "abc";
       process.env.NEXT_PUBLIC_COUNTER_TICK_MS = "0"; // 0 is falsy, falls back to 1000
 
       const constants = require("../constants");
       expect(constants.TX_TIMEOUT).toBe(30);
-      expect(constants.POINTS_PER_AMT).toBe(1000);
       expect(constants.LEADERBOARD_LIMIT).toBe(50);
       expect(constants.POLL_INTERVAL_MS).toBe(1000);
       expect(constants.COUNTER_TICK_MS).toBe(1000);

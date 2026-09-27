@@ -27,7 +27,8 @@ export interface UserProfile {
 
 export interface BotNFT {
   id: bigint;
-  name: string;
+  /** Owner-set nickname; undefined when unset. Use `tier` to derive a display name. */
+  nickname?: string;
   owner: string;
   tier: BotTier;
   accrual_rate: bigint;
@@ -39,8 +40,11 @@ export interface MarketplaceListing {
   id: bigint;
   seller: string;
   bot_id: bigint;
+  bot_tier: BotTier;
   price: bigint;
+  currency: string;
   listed_at: bigint;
+  active: boolean;
 }
 
 export type Listing = MarketplaceListing;
@@ -75,7 +79,22 @@ export const BOT_TIER_BG_COLORS: Record<BotTier, string> = {
 };
 export interface AccrualState {
   last_claim_ts: bigint;
-  total_claimed_points: bigint;
+  carry_points: bigint;
+  lifetime_points: bigint;
+  /** Combined accrual rate in points per hour, read from the user's bots. */
+  rate: bigint;
+  /** Ledger timestamp when accrual started for the user. */
+  started_at: bigint;
+}
+
+/** Marketplace sales statistics for one bot tier (#432). Amounts are base units. */
+export interface TierStats {
+  tier: BotTier;
+  volume: bigint;
+  sale_count: bigint;
+  last_sale_price: bigint;
+  /** Lowest active listing price; 0n when nothing is listed. */
+  floor_price: bigint;
 }
 
 /**

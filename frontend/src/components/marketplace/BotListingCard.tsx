@@ -39,7 +39,11 @@ export default function BotListingCard({
   isBuying = false,
   isCancelling = false,
 }: BotListingCardProps) {
-  const tier = (bot?.tier ?? "Basic") as BotTier;
+  // #476: listings carry their own bot_tier now, so the card no longer
+  // needs `bot` (a separate per-row lookup) just to know the tier — `bot`
+  // is still used below for nickname/id/accrual-rate, which the listing
+  // itself doesn't carry.
+  const tier = (listing.bot_tier ?? bot?.tier ?? "Basic") as BotTier;
   const tierName = BOT_TIER_NAMES[tier] ?? "Unknown";
   const tierColor = BOT_TIER_COLORS[tier] ?? "text-muted";
   const tierBg = BOT_TIER_BG_COLORS[tier] ?? "bg-muted/20";
@@ -48,7 +52,7 @@ export default function BotListingCard({
   const isOwner =
     connectedAddress !== null &&
     listing.seller.toLowerCase() === connectedAddress.toLowerCase();
-  const botLabel = `${bot?.name || tierName} Bot #${bot?.id?.toString() || listing.bot_id.toString()}`;
+  const botLabel = `${bot?.nickname || tierName} Bot #${bot?.id?.toString() || listing.bot_id.toString()}`;
 
   const [isBuyingConfirmed, setIsBuyingConfirmed] = useState(false);
   const [isCancellingConfirmed, setIsCancellingConfirmed] = useState(false);
@@ -81,7 +85,7 @@ export default function BotListingCard({
           </div>
           <div className="min-w-0">
             <p className="truncate font-display text-sm font-semibold text-text">
-              {bot?.name || tierName} Bot
+              {bot?.nickname || tierName} Bot
             </p>
             <p className="text-xs text-muted">#{bot?.id?.toString() || listing.bot_id.toString()}</p>
           </div>
@@ -139,6 +143,20 @@ export default function BotListingCard({
           aria-label={`Seller address ${listing.seller}`}
         >
           {truncateAddress(listing.seller)}
+        </span>
+      </div>
+
+      {/* Currency (#476) — the contract's token address for this listing's price. */}
+      <div className="flex items-center justify-between gap-2 rounded-lg bg-card-2 px-3 py-2">
+        <span className="text-[10px] uppercase tracking-wider text-muted">
+          Currency
+        </span>
+        <span
+          className="truncate font-mono text-xs text-text"
+          title={listing.currency}
+          aria-label={`Priced in currency contract ${listing.currency}`}
+        >
+          {truncateAddress(listing.currency)}
         </span>
       </div>
 

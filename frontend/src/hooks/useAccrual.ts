@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   getAccrualState,
+  getAccrualConfig,
   getUserProfile,
   isRegistered,
   getUserBots,
@@ -18,9 +19,8 @@ import type { AccrualState, UserProfile } from "@/types";
 import { pollWhenVisible } from "@/lib/polling";
 import { STALE_TIME, GC_TIME, qk, DASHBOARD_POLL_MS } from "@/lib/queryKeys";
 import { trackStatus, newTxId } from "@/components/ui/TxStatus";
+import { COUNTER_TICK_MS } from "@/lib/constants";
 
-const BASIC_BOT_RATE = 1; // Basic bot accrual rate
-const UPDATE_INTERVAL = 1000; // Update every second
 const POINTS_PER_HOUR_DIVISOR = 3600; // Seconds in an hour
 
 /** Identifiers for the three on-chain registration steps. */
@@ -183,10 +183,8 @@ export function useRegister() {
               step.label,
               ACCRUAL_CONTRACT_ID,
               "start_accrual",
-              [
-                nativeToScVal(publicKey, { type: "address" }),
-                nativeToScVal(BASIC_BOT_RATE, { type: "u32" }),
-              ]
+              // The contract derives the rate from the user's bots (#319).
+              [nativeToScVal(publicKey, { type: "address" })]
             );
             break;
         }
@@ -259,6 +257,21 @@ export function useBots() {
     refetchInterval: pollWhenVisible(),
     staleTime: STALE_TIME.STANDARD,
     gcTime: GC_TIME.STANDARD,
+  });
+}
+
+/**
+ * The accrual contract's on-chain config (currently: `points_per_amt`) —
+ * fetched once and cached with `STALE_TIME.STATIC` since it only changes
+ * on redeploy (#477). Not gated on wallet connection: it's the same for
+ * every user and can be read with the anonymous read source.
+ */
+export function useAccrualConfig() {
+  return useQuery({
+    queryKey: qk.accrualConfig(),
+    queryFn: () => getAccrualConfig(),
+    staleTime: STALE_TIME.STATIC,
+    gcTime: GC_TIME.LONG,
   });
 }
 
@@ -451,7 +464,7 @@ export function useClaim() {
       queryClient.setQueryData(
         qk.accrualState(publicKey),
         (old: AccrualState | null | undefined) =>
-          old ? { ...old, last_claim_ts: nowSec, total_claimed_points: 0n } : old
+          old ? { ...old, last_claim_ts: nowSec, carry_points: 0n } : old
       );
       queryClient.setQueryData(
         qk.dashboard(publicKey),
@@ -460,7 +473,7 @@ export function useClaim() {
             ? {
                 ...old,
                 accrualState: old.accrualState
-                  ? { ...old.accrualState, last_claim_ts: nowSec, total_claimed_points: 0n }
+                  ? { ...old.accrualState, last_claim_ts: nowSec, carry_points: 0n }
                   : old.accrualState,
               }
             : old
@@ -550,12 +563,25 @@ export interface AnimatedPoints {
   /** Points accrued since the last claim, recomputed each animation tick. */
   pending: bigint;
   /**
-   * The sub-threshold carry toward the next AMT (0 .. POINTS_PER_AMT - 1),
+   * The sub-threshold carry toward the next AMT (0 .. pointsPerAmt - 1),
    * taken straight from the accrual state. Shown separately as "progress to
    * next AMT" — it is NOT part of the headline, which is why folding it in
    * made the headline reset after every claim (#491, AM-084).
    */
   progressToNext: bigint;
+  /**
+   * The conversion threshold itself, fetched from the accrual contract's
+   * `config()` (#477) — never a hardcoded constant, so a redeploy that
+   * changes it updates the UI without a frontend rebuild. `undefined`
+   * while the config query is still loading; consumers should treat that
+   * the same as "don't render a percentage yet."
+   */
+  pointsPerAmt: number | undefined;
+  /**
+   * `progressToNext / pointsPerAmt`, in `[0, 1)` — ready to feed straight
+   * into a progress bar. `undefined` until the config query resolves.
+   */
+  progressToNextRatio: number | undefined;
 }
 
 export function useAnimatedPoints(): AnimatedPoints {
@@ -563,10 +589,11 @@ export function useAnimatedPoints(): AnimatedPoints {
 
   const { data: accrualState } = useAccrualState();
   const { data: profile } = useProfile();
-  // The user's real on-chain rate across all their bots (#490), not a default.
-  // When the accrual state carries its own `rate` (AM-101) read it from there
-  // instead, so the interpolation matches the contract's own view exactly.
-  const { data: ratePerHour } = useUserTotalRate();
+  const { data: accrualConfig } = useAccrualConfig();
+  // The rate rides along on the accrual state itself (#418), so the
+  // interpolation matches the contract's own view in a single call — no
+  // separate rate query and no ratePerHour argument.
+  const ratePerHour = accrualState?.rate;
   const offsetMs = useLedgerTimeOffset();
   const offsetRef = useRef(offsetMs);
   offsetRef.current = offsetMs;
@@ -591,16 +618,25 @@ export function useAnimatedPoints(): AnimatedPoints {
     };
 
     tick();
-    const interval = setInterval(tick, UPDATE_INTERVAL);
+    const interval = setInterval(tick, COUNTER_TICK_MS);
     return () => clearInterval(interval);
   }, [accrualState, ratePerHour]);
 
-  // The lifetime base is the registry point total (profile.points), NOT
-  // accrualState.total_claimed_points — that field is only the sub-threshold
-  // carry and shrinks back toward zero on every claim (#491, AM-084). When the
-  // accrual-state field `lifetime_points` lands (AM-101) it can replace this.
-  const lifetime = profile?.points ?? BigInt(0);
-  const progressToNext = accrualState?.total_claimed_points ?? BigInt(0);
+  // The headline total uses lifetime_points if available (falling back to profile?.points).
+  // progressToNext uses carry_points.
+  const lifetime = accrualState?.lifetime_points ?? profile?.points ?? BigInt(0);
+  const progressToNext = accrualState?.carry_points ?? BigInt(0);
+  const pointsPerAmt = accrualConfig?.pointsPerAmt;
+  const progressToNextRatio =
+    pointsPerAmt && pointsPerAmt > 0
+      ? Number(progressToNext) / pointsPerAmt
+      : undefined;
 
-  return { total: lifetime + pending, pending, progressToNext };
+  return {
+    total: lifetime + pending,
+    pending,
+    progressToNext,
+    pointsPerAmt,
+    progressToNextRatio,
+  };
 }

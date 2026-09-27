@@ -258,12 +258,18 @@ describe("getAccrualState", () => {
   it("parses raw accrual state correctly", async () => {
     mockSimulate.mockResolvedValue({
       last_claim_ts: 1_700_000_000n,
-      total_claimed_points: 42n,
+      carry_points: 42n,
+      lifetime_points: 250n,
+      rate: 5n,
+      started_at: 1_699_000_000n,
     });
     const state = await getAccrualState("GUSER");
     expect(state).toEqual({
       last_claim_ts: 1_700_000_000n,
-      total_claimed_points: 42n,
+      carry_points: 42n,
+      lifetime_points: 250n,
+      rate: 5n,
+      started_at: 1_699_000_000n,
     });
   });
 
@@ -357,15 +363,27 @@ describe("getActiveListings", () => {
     id: 1n,
     seller: "GSELLER",
     bot_id: 10n,
+    bot_tier: "Gold",
     price: 500n,
+    currency: "CCURRENCY",
     listed_at: 1_700_000_000n,
+    active: true,
   };
 
   it("maps an array of raw listings", async () => {
     mockSimulate.mockResolvedValue([rawListing]);
     const listings = await getActiveListings(0, 100, "GSRC");
     expect(listings).toEqual([
-      { id: 1n, seller: "GSELLER", bot_id: 10n, price: 500n, listed_at: 1_700_000_000n },
+      {
+        id: 1n,
+        seller: "GSELLER",
+        bot_id: 10n,
+        bot_tier: "Gold",
+        price: 500n,
+        currency: "CCURRENCY",
+        listed_at: 1_700_000_000n,
+        active: true,
+      },
     ]);
   });
 
@@ -395,15 +413,27 @@ describe("getUserListings", () => {
     id: 2n,
     seller: "GUSER",
     bot_id: 20n,
+    bot_tier: "Silver",
     price: 1000n,
+    currency: "CCURRENCY",
     listed_at: 1_700_000_001n,
+    active: true,
   };
 
   it("maps an array of raw listings for the user", async () => {
     mockSimulate.mockResolvedValue([rawListing]);
     const listings = await getUserListings("GUSER");
     expect(listings).toEqual([
-      { id: 2n, seller: "GUSER", bot_id: 20n, price: 1000n, listed_at: 1_700_000_001n },
+      {
+        id: 2n,
+        seller: "GUSER",
+        bot_id: 20n,
+        bot_tier: "Silver",
+        price: 1000n,
+        currency: "CCURRENCY",
+        listed_at: 1_700_000_001n,
+        active: true,
+      },
     ]);
   });
 
@@ -640,37 +670,32 @@ describe("getUserBotsDetailed (#483)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// getAllTiers (#478) — tier economics come from the contract, not the client
+// getAllTiers (#478, AM-072) -- single all_tiers call replaces N get_tier_info
 // ---------------------------------------------------------------------------
 describe("getAllTiers (#478)", () => {
-  // Decoded `get_tier_info` results, keyed by the BotTier u32 discriminant.
-  const contractTiers: Record<number, [string, bigint, bigint]> = {
-    0: ["Basic Bot", 1n, 0n],
-    1: ["Bronze Bot", 5n, 5_000_000_000n],
-    2: ["Silver Bot", 25n, 20_000_000_000n],
-    3: ["Gold Bot", 100n, 75_000_000_000n],
-    4: ["Diamond Bot", 500n, 250_000_000_000n],
-  };
+  // Decoded all_tiers response: array of TierInfo structs in tier order.
+  const allTiersResponse = [
+    { name: "Basic Bot", rate: 1n, price: 0n },
+    { name: "Bronze Bot", rate: 5n, price: 5_000_000_000n },
+    { name: "Silver Bot", rate: 25n, price: 20_000_000_000n },
+    { name: "Gold Bot", rate: 100n, price: 75_000_000_000n },
+    { name: "Diamond Bot", rate: 500n, price: 250_000_000_000n },
+  ];
 
   beforeEach(() => {
-    mockSimulate.mockImplementation(
-      async (_contractId: string, _method: string, args: Array<{ scv: number }>) =>
-        contractTiers[args[0].scv]
-    );
+    mockSimulate.mockResolvedValue([...allTiersResponse]);
   });
 
-  it("reads every tier from get_tier_info by its u32 discriminant", async () => {
+  it("fetches all tiers with a single all_tiers call", async () => {
     const tiers = await getAllTiers("GSRC");
 
-    expect(mockSimulate).toHaveBeenCalledTimes(5);
-    for (let index = 0; index < 5; index++) {
-      expect(mockSimulate).toHaveBeenCalledWith(
-        expect.any(String),
-        "get_tier_info",
-        [{ scv: index }],
-        "GSRC"
-      );
-    }
+    expect(mockSimulate).toHaveBeenCalledTimes(1);
+    expect(mockSimulate).toHaveBeenCalledWith(
+      expect.any(String),
+      "all_tiers",
+      [],
+      "GSRC"
+    );
     expect(tiers.Basic).toEqual({ tier: "Basic", name: "Basic Bot", rate: 1n, price: 0n });
     expect(tiers.Diamond).toEqual({
       tier: "Diamond",
@@ -681,19 +706,18 @@ describe("getAllTiers (#478)", () => {
   });
 
   it("reflects a contract-side rate change with no frontend change", async () => {
-    contractTiers[4] = ["Diamond Bot", 750n, 250_000_000_000n];
-    try {
-      const tiers = await getAllTiers("GSRC");
-      expect(tiers.Diamond.rate).toBe(750n);
-    } finally {
-      contractTiers[4] = ["Diamond Bot", 500n, 250_000_000_000n];
-    }
+    mockSimulate.mockResolvedValue([
+      ...allTiersResponse.slice(0, 4),
+      { name: "Diamond Bot", rate: 750n, price: 250_000_000_000n },
+    ]);
+    const tiers = await getAllTiers("GSRC");
+    expect(tiers.Diamond.rate).toBe(750n);
   });
 
-  it("throws when a tier comes back in an unexpected shape", async () => {
+  it("throws when all_tiers returns an unexpected shape", async () => {
     mockSimulate.mockResolvedValue(null);
     await expect(getAllTiers("GSRC")).rejects.toThrow(
-      "get_tier_info returned unexpected shape"
+      "all_tiers returned unexpected shape"
     );
   });
 
@@ -971,8 +995,11 @@ describe("parse helpers in contracts.ts", () => {
         id: "1",
         seller: "GABC1234567890",
         bot_id: 42,
+        bot_tier: "Diamond",
         price: "1000000000",
+        currency: "CCURRENCY1234567890",
         listed_at: 1700000000n,
+        active: true,
       };
 
       const result = parseListing(rawData);
@@ -981,14 +1008,47 @@ describe("parse helpers in contracts.ts", () => {
         id: 1n,
         seller: "GABC1234567890",
         bot_id: 42n,
+        bot_tier: "Diamond",
         price: 1000000000n,
+        currency: "CCURRENCY1234567890",
         listed_at: 1700000000n,
+        active: true,
       });
     });
 
     it("throws naming the field when a required field is missing (#484)", () => {
       expect(() => parseListing({})).toThrow(/"id"/);
       expect(() => parseListing({ id: 1n })).toThrow(/"bot_id"/);
+    });
+
+    it("accepts the one-element-array enum shape for bot_tier, same as parseBotNFT (#476)", () => {
+      const result = parseListing({
+        id: 1n,
+        seller: "GABC",
+        bot_id: 1n,
+        bot_tier: ["Bronze"],
+        price: 1n,
+        currency: "CCURRENCY",
+        listed_at: 1n,
+        active: false,
+      });
+      expect(result.bot_tier).toBe("Bronze");
+      expect(result.active).toBe(false);
+    });
+
+    it("throws on an unrecognized bot_tier rather than silently defaulting (#476)", () => {
+      expect(() =>
+        parseListing({
+          id: 1n,
+          seller: "GABC",
+          bot_id: 1n,
+          bot_tier: "Legendary",
+          price: 1n,
+          currency: "CCURRENCY",
+          listed_at: 1n,
+          active: true,
+        })
+      ).toThrow(/unrecognized tier/);
     });
   });
 });

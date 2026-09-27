@@ -15,6 +15,7 @@ import {
   getUserProfile,
   getUserBots,
   getAccrualState,
+  getAccrualConfig,
   getAmtBalance,
   getUserTotalRate,
 } from '@/lib/contracts';
@@ -39,6 +40,7 @@ const mockIsRegistered = isRegistered as jest.MockedFunction<typeof isRegistered
 const mockGetUserProfile = getUserProfile as jest.MockedFunction<typeof getUserProfile>;
 const mockGetUserBots = getUserBots as jest.MockedFunction<typeof getUserBots>;
 const mockGetAccrualState = getAccrualState as jest.MockedFunction<typeof getAccrualState>;
+const mockGetAccrualConfig = getAccrualConfig as jest.MockedFunction<typeof getAccrualConfig>;
 const mockGetAmtBalance = getAmtBalance as jest.MockedFunction<typeof getAmtBalance>;
 const mockGetUserTotalRate = getUserTotalRate as jest.MockedFunction<typeof getUserTotalRate>;
 const mockExecuteTransaction = executeTransaction as jest.MockedFunction<
@@ -134,7 +136,10 @@ describe('useAccrual Hooks', () => {
       mockGetUserBots.mockResolvedValue([1n]);
       mockGetAccrualState.mockResolvedValue({
         last_claim_ts: 1n,
-        total_claimed_points: 0n,
+        carry_points: 0n,
+        lifetime_points: 0n,
+        rate: 1n,
+        started_at: 1n,
       });
 
       const { result } = renderHook(() => useRegister(), { wrapper });
@@ -348,7 +353,10 @@ describe('useAccrual Hooks', () => {
     it('should return accrual state', async () => {
       const mockState: AccrualState = {
         last_claim_ts: 1234567890n,
-        total_claimed_points: 1000n,
+        carry_points: 1000n,
+        lifetime_points: 2500n,
+        rate: 1n,
+        started_at: 1234567890n,
       };
 
       mockGetAccrualState.mockResolvedValue(mockState);
@@ -470,6 +478,8 @@ describe('useAnimatedPoints (#491, #490)', () => {
     );
     // A single Basic bot unless a test says otherwise.
     mockGetUserTotalRate.mockResolvedValue(1n);
+    // The on-chain conversion threshold (#477) — 100 unless a test overrides it.
+    mockGetAccrualConfig.mockResolvedValue({ pointsPerAmt: 100 });
   });
   afterEach(() => jest.useRealTimers());
 
@@ -482,7 +492,10 @@ describe('useAnimatedPoints (#491, #490)', () => {
     mockGetUserProfile.mockResolvedValue({ username: 'u', points: 12_345n });
     mockGetAccrualState.mockResolvedValue({
       last_claim_ts: BigInt(lastClaim),
-      total_claimed_points: 42n, // the sub-threshold carry, NOT a lifetime total
+      carry_points: 42n,
+      lifetime_points: 12_345n,
+      rate: 1n,
+      started_at: BigInt(lastClaim),
     });
 
     const { result } = renderHook(() => useAnimatedPoints(), { wrapper: wrap });
@@ -498,12 +511,52 @@ describe('useAnimatedPoints (#491, #490)', () => {
     expect(result.current.progressToNext).toBe(42n);
   });
 
+  it('derives progressToNextRatio from the fetched accrual config, not a hardcoded threshold (#477)', async () => {
+    mockGetAccrualConfig.mockResolvedValue({ pointsPerAmt: 200 });
+    mockGetUserProfile.mockResolvedValue({ username: 'u', points: 0n });
+    mockGetAccrualState.mockResolvedValue({
+      last_claim_ts: BigInt(Math.floor(Date.now() / 1000)),
+      carry_points: 50n,
+      lifetime_points: 0n,
+      rate: 1n,
+      started_at: BigInt(Math.floor(Date.now() / 1000)),
+    });
+
+    const { result } = renderHook(() => useAnimatedPoints(), { wrapper: wrap });
+
+    await waitFor(() => expect(result.current.pointsPerAmt).toBe(200));
+    // 50 / 200 — if this were still derived from the old hardcoded 1000
+    // default, it would read 0.05 instead of 0.25.
+    expect(result.current.progressToNextRatio).toBeCloseTo(0.25);
+    expect(mockGetAccrualConfig).toHaveBeenCalled();
+  });
+
+  it('leaves progressToNextRatio undefined until the accrual config query resolves', async () => {
+    mockGetAccrualConfig.mockReturnValue(new Promise(() => {})); // never resolves
+    mockGetUserProfile.mockResolvedValue({ username: 'u', points: 0n });
+    mockGetAccrualState.mockResolvedValue({
+      last_claim_ts: BigInt(Math.floor(Date.now() / 1000)),
+      carry_points: 50n,
+      lifetime_points: 0n,
+      rate: 1n,
+      started_at: BigInt(Math.floor(Date.now() / 1000)),
+    });
+
+    const { result } = renderHook(() => useAnimatedPoints(), { wrapper: wrap });
+
+    expect(result.current.pointsPerAmt).toBeUndefined();
+    expect(result.current.progressToNextRatio).toBeUndefined();
+  });
+
   it('never renders a total below the registry lifetime points across a claim', async () => {
     // Immediately after a claim: last_claim_ts is now, carry reset to a few.
     mockGetUserProfile.mockResolvedValue({ username: 'u', points: 1000n });
     mockGetAccrualState.mockResolvedValue({
       last_claim_ts: BigInt(Math.floor(Date.now() / 1000)),
-      total_claimed_points: 3n,
+      carry_points: 3n,
+      lifetime_points: 1000n,
+      rate: 1n,
+      started_at: BigInt(Math.floor(Date.now() / 1000)),
     });
 
     const { result } = renderHook(() => useAnimatedPoints(), { wrapper: wrap });
@@ -513,35 +566,48 @@ describe('useAnimatedPoints (#491, #490)', () => {
   });
 
   it('ticks at the on-chain total rate of a multi-bot account, not a default', async () => {
-    // Basic (1) + Diamond (500) = 501 pts/hr, as reported by get_user_total_rate.
-    mockGetUserTotalRate.mockResolvedValue(501n);
+    // Basic (1) + Diamond (500) = 501 pts/hr, carried on the accrual state
+    // itself (#418) — no separate rate query.
     mockGetUserProfile.mockResolvedValue({ username: 'u', points: 0n });
     mockGetAccrualState.mockResolvedValue({
       last_claim_ts: BigInt(Math.floor(Date.now() / 1000) - 3600), // one hour ago
-      total_claimed_points: 0n,
+      carry_points: 0n,
+      lifetime_points: 0n,
+      rate: 501n,
+      started_at: BigInt(Math.floor(Date.now() / 1000) - 3600),
     });
 
     const { result } = renderHook(() => useAnimatedPoints(), { wrapper: wrap });
 
     await waitFor(() => expect(result.current.pending).toBe(501n));
-    expect(mockGetUserTotalRate).toHaveBeenCalledWith(pk);
+    expect(mockGetAccrualState).toHaveBeenCalledWith(pk);
   });
 
-  it('changes the tick rate once a poll returns a new rate after the bots change', async () => {
+  it('changes the tick rate once a poll returns a new state rate after the bots change', async () => {
     mockGetUserProfile.mockResolvedValue({ username: 'u', points: 0n });
+    const lastClaim = BigInt(Math.floor(Date.now() / 1000) - 3600);
     mockGetAccrualState.mockResolvedValue({
-      last_claim_ts: BigInt(Math.floor(Date.now() / 1000) - 3600),
-      total_claimed_points: 0n,
+      last_claim_ts: lastClaim,
+      carry_points: 0n,
+      lifetime_points: 0n,
+      rate: 1n,
+      started_at: lastClaim,
     });
 
     const { result } = renderHook(() => useAnimatedPoints(), { wrapper: wrap });
     await waitFor(() => expect(result.current.pending).toBe(1n));
 
-    // The user buys a Gold bot. Bot-changing mutations invalidate qk.bots,
-    // under which the total rate is keyed, so it refetches the new rate.
-    mockGetUserTotalRate.mockResolvedValue(101n);
+    // The user buys a Gold bot. The next accrual-state poll carries the new
+    // rate, so invalidating that query picks up 101 pts/hr.
+    mockGetAccrualState.mockResolvedValue({
+      last_claim_ts: lastClaim,
+      carry_points: 0n,
+      lifetime_points: 0n,
+      rate: 101n,
+      started_at: lastClaim,
+    });
     await act(async () => {
-      await qc.invalidateQueries({ queryKey: qk.bots(pk) });
+      await qc.invalidateQueries({ queryKey: qk.accrualState(pk) });
     });
 
     await waitFor(() => expect(result.current.pending).toBe(101n));

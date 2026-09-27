@@ -86,6 +86,9 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "u64": 100
                 }
               ]
@@ -4417,14 +4420,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4449,11 +4444,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -4527,14 +4520,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4559,11 +4544,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -4637,14 +4620,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4669,11 +4644,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -4747,14 +4720,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4779,11 +4744,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -4857,14 +4820,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4889,11 +4844,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -4967,14 +4920,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -4999,11 +4944,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5077,14 +5020,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5109,11 +5044,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5187,14 +5120,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5219,11 +5144,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5297,14 +5220,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5329,11 +5244,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5407,14 +5320,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5439,11 +5344,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5517,14 +5420,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5549,11 +5444,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5627,14 +5520,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5659,11 +5544,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5737,14 +5620,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5769,11 +5644,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5847,14 +5720,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5879,11 +5744,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -5957,14 +5820,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -5989,11 +5844,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -6067,14 +5920,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6099,11 +5944,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -6177,14 +6020,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6209,11 +6044,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -6287,14 +6120,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6319,11 +6144,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -6397,14 +6220,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6429,11 +6244,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -6507,14 +6320,6 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "accrual_rate"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "bonus_bps"
                       },
                       "val": {
@@ -6539,11 +6344,9 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "nickname"
                       },
-                      "val": {
-                        "string": "Basic Bot"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -6568,6 +6371,112 @@
                       "val": {
                         "u32": 0
                       }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          120960
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "TierIndex"
+                },
+                {
+                  "u32": 0
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "TierIndex"
+                    },
+                    {
+                      "u32": 0
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "u64": 1
+                    },
+                    {
+                      "u64": 2
+                    },
+                    {
+                      "u64": 3
+                    },
+                    {
+                      "u64": 4
+                    },
+                    {
+                      "u64": 5
+                    },
+                    {
+                      "u64": 6
+                    },
+                    {
+                      "u64": 7
+                    },
+                    {
+                      "u64": 8
+                    },
+                    {
+                      "u64": 9
+                    },
+                    {
+                      "u64": 10
+                    },
+                    {
+                      "u64": 11
+                    },
+                    {
+                      "u64": 12
+                    },
+                    {
+                      "u64": 13
+                    },
+                    {
+                      "u64": 14
+                    },
+                    {
+                      "u64": 15
+                    },
+                    {
+                      "u64": 16
+                    },
+                    {
+                      "u64": 17
+                    },
+                    {
+                      "u64": 18
+                    },
+                    {
+                      "u64": 19
+                    },
+                    {
+                      "u64": 20
                     }
                   ]
                 }
@@ -6620,7 +6529,7 @@
             },
             "ext": "v0"
           },
-          4095
+          120960
         ]
       ],
       [
@@ -7762,6 +7671,81 @@
                         },
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 0
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 1
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 1
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 5
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 2
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 25
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 3
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 100
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TierRate"
+                            },
+                            {
+                              "u32": 4
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 500
                         }
                       }
                     ]
@@ -8945,6 +8929,18 @@
                         },
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "BotNft"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                         }
                       },
                       {
@@ -13464,6 +13460,18 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "ListingCap"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 50
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "NextListingId"
                             }
                           ]
@@ -15671,6 +15679,9 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "u64": 100
                 }
               ]
@@ -15731,6 +15742,53 @@
                   "u32": 250
                 }
               ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000006",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000003"
+              },
+              {
+                "symbol": "admin"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "admin"
+              }
+            ],
+            "data": {
+              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
             }
           }
         }
@@ -15990,6 +16048,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 1
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -16153,11 +16241,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -16577,11 +16663,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -17137,6 +17221,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 2
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -17300,11 +17414,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -17724,11 +17836,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -18284,6 +18394,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 3
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -18447,11 +18587,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -18871,11 +19009,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -19431,6 +19567,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 4
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -19594,11 +19760,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -20018,11 +20182,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -20578,6 +20740,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 5
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -20741,11 +20933,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -21165,11 +21355,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -21725,6 +21913,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 6
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -21888,11 +22106,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -22312,11 +22528,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -22872,6 +23086,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 7
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -23035,11 +23279,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -23459,11 +23701,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -24019,6 +24259,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 8
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -24182,11 +24452,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -24606,11 +24874,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -25166,6 +25432,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 9
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -25329,11 +25625,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -25753,11 +26047,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -26313,6 +26605,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 10
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -26476,11 +26798,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -26900,11 +27220,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -27460,6 +27778,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 11
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -27623,11 +27971,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -28047,11 +28393,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -28607,6 +28951,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 12
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -28770,11 +29144,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -29194,11 +29566,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -29754,6 +30124,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 13
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -29917,11 +30317,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -30341,11 +30739,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -30901,6 +31297,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 14
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -31064,11 +31490,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -31488,11 +31912,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -32048,6 +32470,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 15
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -32211,11 +32663,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -32635,11 +33085,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -33195,6 +33643,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 16
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -33358,11 +33836,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -33782,11 +34258,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -34342,6 +34816,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 17
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -34505,11 +35009,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -34929,11 +35431,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -35489,6 +35989,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 18
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -35652,11 +36182,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -36076,11 +36604,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -36636,6 +37162,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 19
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -36799,11 +37355,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -37223,11 +37777,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -37783,6 +38335,36 @@
           "v0": {
             "topics": [
               {
+                "symbol": "regfail"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 20
+                },
+                {
+                  "symbol": "incfail"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "mint"
               },
               {
@@ -37946,11 +38528,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -38370,11 +38950,9 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "nickname"
                   },
-                  "val": {
-                    "string": "Basic Bot"
-                  }
+                  "val": "void"
                 },
                 {
                   "key": {
