@@ -19,7 +19,7 @@ pub enum DataKey {
     UserAccrual(Address),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct Config {
     pub points_per_amt: u64,
@@ -34,8 +34,6 @@ fn read_accrual_state(env: &Env, user: &Address) -> Option<AccrualState> {
             total_claimed_points: a.total_claimed_points,
         })
 }
-
-
 
 #[derive(Clone)]
 #[contracttype]
@@ -55,10 +53,31 @@ pub enum AccrualError {
     NotStarted = 3,
     Unauthorized = 4,
     NotInitialized = 5,
+    Overflow = 6,
+    InvalidConfig = 7,
 }
 
 const LEDGER_BUMP: u32 = 120960;
 const LEDGER_THRESHOLD: u32 = 103680;
+
+/// Pure helper to compute points accrued over `elapsed` seconds at `rate` points per hour,
+/// plus any `leftover` unminted points carried over from previous claims.
+///
+/// Returns `Ok((pending_points, total_points))` where `pending_points` is newly accrued points
+/// in this interval and `total_points` is `leftover + pending_points`.
+/// Returns `Err(AccrualError::Overflow)` on arithmetic overflow.
+pub fn compute_pending(
+    elapsed: u64,
+    rate: u64,
+    leftover: u64,
+) -> Result<(u64, u64), AccrualError> {
+    let product = elapsed.checked_mul(rate).ok_or(AccrualError::Overflow)?;
+    let pending = product / 3600;
+    let total = leftover
+        .checked_add(pending)
+        .ok_or(AccrualError::Overflow)?;
+    Ok((pending, total))
+}
 
 #[contract]
 pub struct AccrualContract;
@@ -75,7 +94,7 @@ impl AccrualContract {
         }
 
         if points_per_amt == 0 {
-            return Err(AccrualError::Unauthorized);
+            return Err(AccrualError::InvalidConfig);
         }
 
         admin.require_auth();
@@ -130,14 +149,20 @@ impl AccrualContract {
         Ok(())
     }
 
-    pub fn pending_points(env: Env, user: Address) -> Result<u128, AccrualError> {
+    pub fn pending_points(env: Env, user: Address) -> Result<u64, AccrualError> {
         let accrual: UserAccrual = env
             .storage()
             .persistent()
             .get(&DataKey::UserAccrual(user))
             .ok_or(AccrualError::NotStarted)?;
-        let elapsed = env.ledger().timestamp().saturating_sub(accrual.last_claim_ts) as u128;
-        Ok(elapsed.saturating_mul(accrual.rate as u128) / 3600)
+        let current_ts = env.ledger().timestamp();
+        let elapsed = if current_ts < accrual.last_claim_ts {
+            0
+        } else {
+            current_ts - accrual.last_claim_ts
+        };
+        let (pending, _) = compute_pending(elapsed, accrual.rate, accrual.total_claimed_points)?;
+        Ok(pending)
     }
 
     pub fn get_accrual_state(env: Env, user: Address) -> Option<AccrualState> {
@@ -149,7 +174,7 @@ impl AccrualContract {
         user: Address,
         token_contract: Address,
         registry: Address,
-    ) -> Result<i128, AccrualError> {
+    ) -> Result<u64, AccrualError> {
         user.require_auth();
 
         let accrual: UserAccrual = env
@@ -159,17 +184,26 @@ impl AccrualContract {
             .ok_or(AccrualError::NotStarted)?;
 
         let current_ts = env.ledger().timestamp();
-        let elapsed = current_ts.saturating_sub(accrual.last_claim_ts);
-        let pending = elapsed.saturating_mul(accrual.rate) / 3600;
+        let is_clock_skew = current_ts < accrual.last_claim_ts;
+
+        let (elapsed, next_last_claim_ts) = if is_clock_skew {
+            env.events().publish(
+                (symbol_short!("clkskew"), user.clone()),
+                (current_ts, accrual.last_claim_ts),
+            );
+            (0, accrual.last_claim_ts)
+        } else {
+            (current_ts - accrual.last_claim_ts, current_ts)
+        };
+
+        let (pending, updated_points) =
+            compute_pending(elapsed, accrual.rate, accrual.total_claimed_points)?;
 
         let config: Config = env
             .storage()
             .instance()
             .get(&DataKey::Config)
-            .ok_or(AccrualError::Unauthorized)?;
-
-        // Total redeemable points
-        let updated_points = accrual.total_claimed_points.saturating_add(pending);
+            .ok_or(AccrualError::NotInitialized)?;
 
         // Number of AMT tokens to mint
         let amt_to_mint = updated_points / config.points_per_amt;
@@ -201,7 +235,7 @@ impl AccrualContract {
         let updated_accrual = UserAccrual {
             user: accrual.user,
             rate: accrual.rate,
-            last_claim_ts: current_ts,
+            last_claim_ts: next_last_claim_ts,
             total_claimed_points: remaining_points,
             started_at: accrual.started_at,
         };
@@ -220,7 +254,43 @@ impl AccrualContract {
             (pending, remaining_points),
         );
 
-        Ok(pending as i128)
+        Ok(pending)
+    }
+
+    pub fn set_points_per_amt(env: Env, points_per_amt: u64) -> Result<(), AccrualError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(AccrualError::NotInitialized)?;
+        admin.require_auth();
+
+        if points_per_amt == 0 {
+            return Err(AccrualError::InvalidConfig);
+        }
+
+        let current_config: Config = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(AccrualError::NotInitialized)?;
+        let old_val = current_config.points_per_amt;
+
+        // Bound changes to at most 2x jump in either direction
+        if points_per_amt > old_val.saturating_mul(2) || points_per_amt.saturating_mul(2) < old_val {
+            return Err(AccrualError::InvalidConfig);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Config, &Config { points_per_amt });
+
+        env.events().publish(
+            (symbol_short!("cfg_upd"), admin),
+            (old_val, points_per_amt),
+        );
+
+        Ok(())
     }
 
     pub fn admin(env: Env) -> Address {
@@ -238,7 +308,7 @@ impl AccrualContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, testutils::Ledger, Env, String};
+    use soroban_sdk::{testutils::Address as _, testutils::Events, testutils::Ledger, vec, Env, IntoVal, String};
 
     fn register_user(env: &Env, registry: &Address, user: &Address, name: &str) {
         let reg_client = automint_registry::RegistryContractClient::new(env, registry);
@@ -253,7 +323,7 @@ mod test {
         AccrualContractClient<'static>,
     ) {
         let env = Env::default();
-        env.mock_all_auths();
+        env.mock_all_auths_allowing_non_root_auth();
         let id = env.register_contract(None, AccrualContract);
         let client = AccrualContractClient::new(&env, &id);
         let admin = Address::generate(&env);
@@ -284,8 +354,8 @@ mod test {
 
     #[test]
     fn test_double_initialize_fails() {
-        let (env, _admin, _registry, _token, client) = setup();
-        assert!(client.try_initialize(&_admin, &100_u64).is_err());
+        let (_env, admin, _registry, _token, client) = setup();
+        assert!(client.try_initialize(&admin, &100_u64).is_err());
     }
 
     #[test]
@@ -572,5 +642,153 @@ mod test {
         let c1 = client.config();
         let c2 = client.config();
         assert_eq!(c1.points_per_amt, c2.points_per_amt);
+    }
+
+    // Issue #408 tests: compute_pending unification and overflow handling
+    #[test]
+    fn test_compute_pending_basic() {
+        let (pending, total) = compute_pending(3600, 100, 20).unwrap();
+        assert_eq!(pending, 100);
+        assert_eq!(total, 120);
+
+        let (pending_zero, total_zero) = compute_pending(0, 100, 50).unwrap();
+        assert_eq!(pending_zero, 0);
+        assert_eq!(total_zero, 50);
+    }
+
+    #[test]
+    fn test_compute_pending_overflow_elapsed_mul_rate() {
+        let res = compute_pending(u64::MAX, 2, 0);
+        assert_eq!(res, Err(AccrualError::Overflow));
+    }
+
+    #[test]
+    fn test_compute_pending_overflow_leftover_add() {
+        let res = compute_pending(3600, 10, u64::MAX);
+        assert_eq!(res, Err(AccrualError::Overflow));
+    }
+
+    #[test]
+    fn test_pending_points_and_claim_equivalence_property() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "equiv_user");
+        let rate = 7200_u64; // 2 points per sec
+        client.start_accrual(&user, &rate);
+
+        for elapsed in [10_u64, 45, 120, 3600, 7200] {
+            env.ledger().with_mut(|l| {
+                l.timestamp += elapsed;
+            });
+
+            let expected_pending = client.pending_points(&user);
+            let claimed_pending = client.claim(&user, &token, &registry);
+            assert_eq!(expected_pending, claimed_pending);
+        }
+    }
+
+    // Issue #409 tests: Clock skew / backward timestamp handling
+    #[test]
+    fn test_backwards_clock_does_not_lose_accrual_and_preserves_last_claim_ts() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "skew_user");
+        client.start_accrual(&user, &3600_u64); // 1 pt/sec
+
+        let t0 = env.ledger().timestamp();
+
+        // Advance ledger to t0 + 1000 and claim to establish last_claim_ts = t0 + 1000
+        env.ledger().with_mut(|l| {
+            l.timestamp = t0 + 1000;
+        });
+        let initial_claim = client.claim(&user, &token, &registry);
+        assert_eq!(initial_claim, 1000);
+
+        let state1 = client.get_accrual_state(&user).unwrap();
+        assert_eq!(state1.last_claim_ts, t0 + 1000);
+
+        // Backward clock jump to t0 + 500 (< last_claim_ts)
+        env.ledger().with_mut(|l| {
+            l.timestamp = t0 + 500;
+        });
+
+        // Claim during clock skew: should return 0 and not advance last_claim_ts
+        let pending = client.claim(&user, &token, &registry);
+        assert_eq!(pending, 0);
+
+        // State last_claim_ts must NOT be set backwards; remains t0 + 1000
+        let state2 = client.get_accrual_state(&user).unwrap();
+        assert_eq!(state2.last_claim_ts, t0 + 1000);
+
+        // Now ledger advances to t0 + 2000
+        env.ledger().with_mut(|l| {
+            l.timestamp = t0 + 2000;
+        });
+
+        // Full accrual from t0 + 1000 is preserved (1000 pts)
+        let pending_after = client.claim(&user, &token, &registry);
+        assert_eq!(pending_after, 1000);
+    }
+
+    #[test]
+    fn test_backwards_clock_emits_event() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "event_user");
+        client.start_accrual(&user, &3600_u64);
+
+        let t0 = env.ledger().timestamp();
+        env.ledger().with_mut(|l| {
+            l.timestamp = t0 + 100;
+        });
+        let _ = client.claim(&user, &token, &registry);
+
+        // Now step backwards
+        env.ledger().with_mut(|l| {
+            l.timestamp = t0 + 50;
+        });
+        let _ = client.claim(&user, &token, &registry);
+
+        let events = env.events().all();
+        let has_skew_event = events.iter().any(|e| {
+            e.1 == vec![&env, symbol_short!("clkskew").into_val(&env), user.clone().into_val(&env)]
+        });
+        assert!(has_skew_event);
+    }
+
+    // Issue #404 tests: points_per_amt setter with bounds checking & events
+    #[test]
+    fn test_set_points_per_amt_success() {
+        let (env, admin, _registry, _token, client) = setup();
+        // Initial is 100, update to 200 (2x jump is allowed)
+        let res = client.try_set_points_per_amt(&200_u64);
+        assert!(res.is_ok());
+
+        assert_eq!(client.config().points_per_amt, 200);
+
+        let events = env.events().all();
+        let has_cfg_event = events.iter().any(|e| {
+            e.1 == vec![&env, symbol_short!("cfg_upd").into_val(&env), admin.clone().into_val(&env)]
+        });
+        assert!(has_cfg_event);
+    }
+
+    #[test]
+    fn test_set_points_per_amt_rejects_zero() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        let res = client.try_set_points_per_amt(&0_u64);
+        assert_eq!(res, Err(Ok(AccrualError::InvalidConfig)));
+    }
+
+    #[test]
+    fn test_set_points_per_amt_rejects_excessive_jumps() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        // Initial is 100: > 200 is excessive increase
+        let res_high = client.try_set_points_per_amt(&201_u64);
+        assert_eq!(res_high, Err(Ok(AccrualError::InvalidConfig)));
+
+        // < 50 is excessive decrease (drop to less than half)
+        let res_low = client.try_set_points_per_amt(&49_u64);
+        assert_eq!(res_low, Err(Ok(AccrualError::InvalidConfig)));
     }
 }
