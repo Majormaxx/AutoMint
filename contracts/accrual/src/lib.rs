@@ -40,6 +40,9 @@ pub enum DataKey {
 #[contracttype]
 pub struct Config {
     pub points_per_amt: u64,
+    /// 10^token_decimals — every mint is multiplied by this so that
+    /// "1 AMT" = `1 * amt_scale` base units (fixes #410).
+    pub amt_scale: i128,
 }
 
 /// Most users a single `get_accrual_states` call accepts.
@@ -130,6 +133,7 @@ impl AccrualContract {
         admin: Address,
         bot_nft: Address,
         registry: Address,
+        token: Address,
         points_per_amt: u64,
     ) -> Result<(), AccrualError> {
         if env.storage().instance().has(&DataKey::Initialized) {
@@ -146,9 +150,18 @@ impl AccrualContract {
         env.storage().instance().set(&DataKey::BotNft, &bot_nft);
         env.storage().instance().set(&DataKey::Registry, &registry);
 
+        // Read the token's decimal count and derive the scale factor (#410).
+        // Cached here so claim() never needs a cross-contract call for it.
+        let decimals: u32 = automint_token::AMTTokenClient::new(&env, &token)
+            .try_decimals()
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or(7);
+        let amt_scale: i128 = 10_i128.pow(decimals);
+
         env.storage()
             .instance()
-            .set(&DataKey::Config, &Config { points_per_amt });
+            .set(&DataKey::Config, &Config { points_per_amt, amt_scale });
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         let mut args = Vec::new(&env);
@@ -352,7 +365,11 @@ impl AccrualContract {
         if amt_to_mint > 0 {
             let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
 
-            let mint_res = token_client.try_mint(&user, &(amt_to_mint as i128));
+            // Scale by token decimals so minting "1 AMT" = 10^decimals base units (#410).
+            let mint_amount = (amt_to_mint as i128)
+                .checked_mul(config.amt_scale)
+                .unwrap_or(amt_to_mint as i128);
+            let mint_res = token_client.try_mint(&user, &mint_amount);
             if mint_res.is_err() || matches!(&mint_res, Ok(Err(_))) {
                 let code = get_token_err_code(&mint_res);
                 env.events()
@@ -369,7 +386,7 @@ impl AccrualContract {
             }
 
             env.events()
-                .publish((symbol_short!("mint"), user.clone()), amt_to_mint as i128);
+                .publish((symbol_short!("mint"), user.clone()), mint_amount);
         }
 
         // Persist state only after all external calls succeed
@@ -498,6 +515,7 @@ mod test {
             &_admin,
             &Address::generate(&_env),
             &_registry,
+            &_token,
             &100_u64,
         );
         assert_eq!(result, Err(Ok(AccrualError::AlreadyInitialized)));
@@ -512,6 +530,7 @@ mod test {
         let admin = Address::generate(&env);
         let result = client.try_initialize(
             &admin,
+            &Address::generate(&env),
             &Address::generate(&env),
             &Address::generate(&env),
             &0_u64,
@@ -1318,7 +1337,7 @@ mod auth_tests {
             &String::from_str(&env, "AMT"),
         );
         bot_nft.initialize(&admin, &registry_id);
-        client.initialize(&admin, &bot_nft_id, &registry_id, &100_u64);
+        client.initialize(&admin, &bot_nft_id, &registry_id, &token_id, &100_u64);
 
         Ctx {
             env,
@@ -1338,8 +1357,9 @@ mod auth_tests {
         let admin = Address::generate(&env);
         let bot_nft = Address::generate(&env);
         let registry = Address::generate(&env);
+        let token = Address::generate(&env);
 
-        let result = client.try_initialize(&admin, &bot_nft, &registry, &100_u64);
+        let result = client.try_initialize(&admin, &bot_nft, &registry, &token, &100_u64);
         assert!(result.is_err());
     }
 
@@ -1351,18 +1371,19 @@ mod auth_tests {
         let admin = Address::generate(&env);
         let bot_nft = Address::generate(&env);
         let registry = Address::generate(&env);
+        let token = Address::generate(&env);
 
         env.mock_auths(&[MockAuth {
             address: &admin,
             invoke: &MockAuthInvoke {
                 contract: &id,
                 fn_name: "initialize",
-                args: (admin.clone(), bot_nft.clone(), registry.clone(), 100_u64)
+                args: (admin.clone(), bot_nft.clone(), registry.clone(), token.clone(), 100_u64)
                     .into_val(&env),
                 sub_invokes: &[],
             },
         }]);
-        let result = client.try_initialize(&admin, &bot_nft, &registry, &100_u64);
+        let result = client.try_initialize(&admin, &bot_nft, &registry, &token, &100_u64);
         assert!(result.is_ok());
     }
 
