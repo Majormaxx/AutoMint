@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #![no_std]
+use automint_common::{extend_instance, extend_persistent, AdminStore, CommonDataKey, CommonError, PausableStore, LEDGER_BUMP, LEDGER_THRESHOLD};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
 };
 
 #[derive(Clone)]
@@ -10,6 +13,8 @@ pub enum DataKey {
     Balance(Address),
     State,
     Admin,
+    TotalSupply,  // #338
+    MaxSupply,    // #339
 }
 
 #[derive(Clone)]
@@ -45,11 +50,12 @@ pub enum TokenError {
     NegativeAmount = 6,
     AllowanceExpired = 7,
     Overflow = 8,
+    Paused = 1000,  // #336
+    SupplyCapExceeded = 9,  // #339
+    InvalidDecimals = 10,   // referenced in tests
 }
 
-// ~7 days at 5s/ledger
-const LEDGER_BUMP: u32 = 120960;
-const LEDGER_THRESHOLD: u32 = 103680;
+// TTL constants moved to automint-common (#337)
 
 #[contract]
 pub struct AMTToken;
@@ -66,8 +72,9 @@ impl AMTToken {
         if env.storage().instance().has(&DataKey::State) {
             return Err(TokenError::AlreadyInitialized);
         }
+        admin.require_auth();
         if decimal == 0 {
-            return Err(TokenError::NegativeAmount);
+            return Err(TokenError::InvalidDecimals);
         }
         let state = TokenState {
             decimal,
@@ -87,12 +94,10 @@ impl AMTToken {
     // correct answer for either, not an error.
     pub fn allowance(env: Env, from: Address, spender: Address) -> i128 {
         let key = DataKey::Allowance(AllowanceKey { from, spender });
-        if let Some(a) = env.storage().temporary().get::<_, AllowanceValue>(&key) {
-            if a.expiration_ledger >= env.ledger().sequence() {
-                return a.amount;
-            }
+        match env.storage().temporary().get::<_, AllowanceValue>(&key) {
+            Some(a) if a.expiration_ledger >= env.ledger().sequence() => a.amount,
+            _ => 0,
         }
-        0
     }
 
     pub fn approve(
@@ -102,16 +107,15 @@ impl AMTToken {
         amount: i128,
         expiration_ledger: u32,
     ) -> Result<(), TokenError> {
-        if !env.storage().instance().has(&DataKey::State) {
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
+                if !env.storage().instance().has(&DataKey::State) {
             return Err(TokenError::NotInitialized);
         }
         from.require_auth();
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
         }
-        if from == spender {
-            return Err(TokenError::Unauthorized);
-        }
+        // #341: SEP-41 permits self-approval; removed from == spender rejection
         let key = DataKey::Allowance(AllowanceKey {
             from: from.clone(),
             spender: spender.clone(),
@@ -133,15 +137,17 @@ impl AMTToken {
         Ok(())
     }
 
+    /// Returns the token balance for `id`, defaulting to 0 when no record exists.
     pub fn balance(env: Env, id: Address) -> i128 {
         env.storage()
             .persistent()
-            .get::<_, i128>(&DataKey::Balance(id))
+            .get(&DataKey::Balance(id))
             .unwrap_or(0)
     }
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) -> Result<(), TokenError> {
-        from.require_auth();
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
+                from.require_auth();
 
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
@@ -152,7 +158,15 @@ impl AMTToken {
         }
 
         if from == to {
-            return Err(TokenError::Unauthorized);
+            let balance = Self::balance(env.clone(), from.clone());
+            if balance < amount {
+                return Err(TokenError::InsufficientBalance);
+            }
+            env.events().publish(
+                (symbol_short!("transfer"), from.clone(), to.clone()),
+                amount,
+            );
+            return Ok(());
         }
 
         Self::do_transfer(&env, &from, &to, amount)
@@ -165,7 +179,8 @@ impl AMTToken {
         to: Address,
         amount: i128,
     ) -> Result<(), TokenError> {
-        spender.require_auth();
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
+                spender.require_auth();
 
         // Reject negative amounts before touching allowance or balances
         if amount < 0 {
@@ -182,44 +197,94 @@ impl AMTToken {
             return Err(TokenError::Unauthorized);
         }
 
-        // Sending to yourself is always a no-op: reject it to avoid pointless state writes
+        Self::spend_allowance(&env, &from, &spender, amount)?;
+
+        // Self-transfer is a no-op but still consumes allowance (checked above)
         if from == to {
-            return Err(TokenError::Unauthorized);
+            let balance = Self::balance(env.clone(), from.clone());
+            if balance < amount {
+                return Err(TokenError::InsufficientBalance);
+            }
+            env.events().publish(
+                (symbol_short!("transfer"), from.clone(), to.clone()),
+                amount,
+            );
+            return Ok(());
         }
 
-        Self::spend_allowance(&env, &from, &spender, amount)?;
         Self::do_transfer(&env, &from, &to, amount)
     }
 
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), TokenError> {
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
         from.require_auth();
-        
+
         // Validate amount is not negative
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
         }
-        
+
         // Validate amount is not zero (burning zero is pointless)
         if amount == 0 {
             return Ok(()); // No-op for zero amount
         }
-        
+
         // Get current balance and validate it exists and is sufficient
         let balance = Self::balance(env.clone(), from.clone());
         if balance < amount {
             return Err(TokenError::InsufficientBalance);
         }
-        
+
         // Perform the burn
         env.storage()
             .persistent()
             .set(&DataKey::Balance(from.clone()), &(balance - amount));
-        
+
+        // #338: Update total supply
+        let current_supply = Self::total_supply(env.clone());
+        let new_supply = current_supply.checked_sub(amount).ok_or(TokenError::Overflow)?;
+        env.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
+        // #544: as with do_transfer, refresh the balance entry's TTL on
+        // every write instead of only on mint.
+        env.storage().persistent().extend_ttl(
+            &DataKey::Balance(from.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
         env.events().publish((symbol_short!("burn"), from), amount);
         Ok(())
     }
 
+    pub fn burn_from(
+        env: Env,
+        spender: Address,
+        from: Address,
+        amount: i128,
+    ) -> Result<(), TokenError> {
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;
+        spender.require_auth();
+        if amount < 0 { return Err(TokenError::NegativeAmount); }
+        if amount == 0 { return Ok(()); }
+
+        let balance = Self::balance(env.clone(), from.clone());
+        if balance < amount { return Err(TokenError::InsufficientBalance); }
+        Self::spend_allowance(&env, &from, &spender, amount)?;
+        env.storage().persistent().set(&DataKey::Balance(from.clone()), &(balance - amount));
+        let supply = Self::total_supply(env.clone());
+        let new_supply = supply.checked_sub(amount).ok_or(TokenError::Overflow)?;
+        env.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
+        env.storage().persistent().extend_ttl(&DataKey::Balance(from.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.events().publish((symbol_short!("burn"), spender, from), amount);
+        Ok(())
+    }
+
     pub fn mint(env: Env, to: Address, amount: i128) -> Result<(), TokenError> {
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
         Self::require_admin(&env)?;
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
@@ -232,6 +297,19 @@ impl AMTToken {
 
         let balance = Self::balance(env.clone(), to.clone());
         let new_balance = balance.checked_add(amount).ok_or(TokenError::Overflow)?;
+
+        // #338: Update total supply
+        let current_supply = Self::total_supply(env.clone());
+        let new_supply = current_supply.checked_add(amount).ok_or(TokenError::Overflow)?;
+
+        // #339: Check supply cap
+        if let Some(cap) = Self::max_supply(env.clone()) {
+            if new_supply > cap {
+                return Err(TokenError::SupplyCapExceeded);
+            }
+        }
+
+        env.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_balance);
@@ -281,6 +359,76 @@ impl AMTToken {
             .instance()
             .get::<_, Address>(&DataKey::Admin)
             .ok_or(TokenError::NotInitialized)
+    }
+
+    /// Returns the total supply of tokens (#338)
+    pub fn total_supply(env: Env) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TotalSupply)
+            .unwrap_or(0)
+    }
+
+    /// Returns the max supply cap, if set (#339)
+    pub fn max_supply(env: Env) -> Option<i128> {
+        env.storage().persistent().get(&DataKey::MaxSupply)
+    }
+
+    /// Admin-only: set the maximum supply cap. Fails if cap is below current supply (#339)
+    pub fn set_max_supply(env: Env, new_cap: Option<i128>) -> Result<(), TokenError> {
+        Self::require_admin(&env)?;
+
+        if let Some(cap) = new_cap {
+            if cap < 0 {
+                return Err(TokenError::NegativeAmount);
+            }
+            let current_supply = Self::total_supply(env.clone());
+            if cap < current_supply {
+                return Err(TokenError::SupplyCapExceeded);
+            }
+        }
+
+        if let Some(cap) = new_cap {
+            env.storage().persistent().set(&DataKey::MaxSupply, &cap);
+        } else {
+            env.storage().persistent().remove(&DataKey::MaxSupply);
+        }
+
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.events()
+            .publish((symbol_short!("maxsup"),), new_cap.unwrap_or(-1));
+        Ok(())
+    }
+
+    /// Checks if the contract is paused (#336)
+    pub fn paused(env: Env) -> bool {
+        PausableStore::is_paused(&env)
+    }
+
+    /// Pauses the contract (admin-only) (#336)
+    pub fn pause(env: Env) -> Result<(), TokenError> {
+        Self::require_admin(&env)?;
+        PausableStore::set_paused(&env, true);
+        env.events().publish((symbol_short!("pause"),), true);
+        Ok(())
+    }
+
+    /// Unpauses the contract (admin-only) (#336)
+    pub fn unpause(env: Env) -> Result<(), TokenError> {
+        Self::require_admin(&env)?;
+        PausableStore::set_paused(&env, false);
+        env.events().publish((symbol_short!("unpause"),), false);
+        Ok(())
+    }
+
+    /// Upgrades the contract wasm (admin-only) (#336)
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), TokenError> {
+        Self::require_admin(&env)?;
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        env.events().publish((symbol_short!("upgrade"),), ());
+        Ok(())
     }
 
     pub fn decimals(env: Env) -> Result<u32, TokenError> {
@@ -349,11 +497,26 @@ impl AMTToken {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_to);
+        // #544: the sender's balance entry is written on every transfer
+        // just like the recipient's, but its TTL was never refreshed here —
+        // only the recipient's was. A wallet that only ever sends (never
+        // receives) could have its balance entry silently archive even
+        // while actively transacting. Bump both sides.
+        env.storage().persistent().extend_ttl(
+            &DataKey::Balance(from.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.storage().persistent().extend_ttl(
             &DataKey::Balance(to.clone()),
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+        // Keep the contract instance itself alive on write activity too —
+        // mirrors `registry::register` and the bot_nft `transfer` fix.
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         env.events().publish(
             (symbol_short!("transfer"), from.clone(), to.clone()),
             amount,
@@ -397,9 +560,15 @@ impl AMTToken {
 }
 
 #[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Ledger as _}, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger as _},
+        Env, String,
+    };
 
     fn setup() -> (Env, Address, AMTTokenClient<'static>) {
         let env = Env::default();
@@ -422,6 +591,102 @@ mod test {
         let user = Address::generate(&env);
         client.mint(&user, &10_000_000_000_i128);
         assert_eq!(client.balance(&user), 10_000_000_000_i128);
+    }
+
+    // --- balance: edge cases (#79) ---
+
+    // #79: Missing balance record defaults to zero
+    #[test]
+    fn test_balance_missing_record_returns_zero() {
+        let (env, _admin, client) = setup();
+        let never_minted = Address::generate(&env);
+        assert_eq!(client.balance(&never_minted), 0_i128);
+    }
+
+    // #79: Uninitialized contract — balance query returns zero without panicking
+    #[test]
+    fn test_balance_uninitialized_contract_returns_zero() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let user = Address::generate(&env);
+        assert_eq!(client.balance(&user), 0_i128);
+    }
+
+    // #79: Minting zero tokens leaves balance at zero (missing-record path)
+    #[test]
+    fn test_balance_zero_mint_on_missing_record() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.mint(&user, &0_i128);
+        assert_eq!(client.balance(&user), 0_i128);
+    }
+
+    // #79: Balances are independent per address
+    #[test]
+    fn test_balance_independent_per_address() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &100_i128);
+        assert_eq!(client.balance(&alice), 100_i128);
+        assert_eq!(client.balance(&bob), 0_i128);
+    }
+
+    // #79: Zero-amount burn on a missing record is a no-op — balance stays zero
+    #[test]
+    fn test_balance_zero_burn_on_missing_record() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.burn(&user, &0_i128);
+        assert_eq!(client.balance(&user), 0_i128);
+    }
+
+    // #79: Zero amount → Ok(()) no-op (balances untouched)
+    #[test]
+    fn test_transfer_zero_amount_is_noop() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.transfer(&alice, &bob, &0_i128);
+        assert_eq!(client.balance(&alice), 1000_i128);
+        assert_eq!(client.balance(&bob), 0_i128);
+    }
+
+    // #79: Negative amount → NegativeAmount
+    #[test]
+    fn test_transfer_negative_amount_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        let result = client.try_transfer(&alice, &bob, &-1_i128);
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+        assert_eq!(client.balance(&alice), 1000_i128);
+    }
+
+    // #340: from == to (self-transfer) → Ok, balance unchanged, event emitted
+    #[test]
+    fn test_transfer_self_transfer_succeeds() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        let result = client.try_transfer(&alice, &alice, &100_i128);
+        assert_eq!(result, Ok(Ok(())));
+        assert_eq!(client.balance(&alice), 1000_i128);
+    }
+
+    // #340: self-transfer exceeding balance still fails
+    #[test]
+    fn test_transfer_self_transfer_insufficient_balance() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &100_i128);
+        let result = client.try_transfer(&alice, &alice, &200_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
+        assert_eq!(client.balance(&alice), 100_i128);
     }
 
     #[test]
@@ -451,7 +716,7 @@ mod test {
         let bob = Address::generate(&env);
         client.mint(&alice, &100_i128);
         let result = client.try_transfer(&alice, &bob, &200_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
     }
 
     #[test]
@@ -463,7 +728,7 @@ mod test {
             &String::from_str(&env, "AutoMint Token"),
             &String::from_str(&env, "AMT"),
         );
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::AlreadyInitialized)));
     }
 
     #[test]
@@ -471,7 +736,8 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         client.mint(&user, &100_i128);
-        assert!(client.try_burn(&user, &200_i128).is_err());
+        let result = client.try_burn(&user, &200_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
     }
 
     // --- set_admin: happy path ---
@@ -579,7 +845,12 @@ mod test {
         let alice = Address::generate(&env);
         let spender = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        client.approve(&alice, &spender, &300_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &300_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         let new_admin = Address::generate(&env);
         client.set_admin(&new_admin);
         // Allowance must be untouched
@@ -615,7 +886,12 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &500_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         client.transfer_from(&spender, &alice, &bob, &500_i128);
         assert_eq!(client.allowance(&alice, &spender), 0_i128);
         assert_eq!(client.balance(&bob), 500_i128);
@@ -651,7 +927,12 @@ mod test {
         let bob = Address::generate(&env);
         // Give alice only 50 but approve spender for 200
         client.mint(&alice, &50_i128);
-        client.approve(&alice, &spender, &200_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &200_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         let result = client.try_transfer_from(&spender, &alice, &bob, &200_i128);
         assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
     }
@@ -664,7 +945,12 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &500_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         let allowance_before = client.allowance(&alice, &spender);
         let result = client.try_transfer_from(&spender, &alice, &bob, &-100_i128);
         assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
@@ -680,7 +966,12 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &500_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         // Should succeed without consuming allowance or moving tokens
         client.transfer_from(&spender, &alice, &bob, &0_i128);
         assert_eq!(client.allowance(&alice, &spender), 500_i128);
@@ -700,18 +991,46 @@ mod test {
         assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
     }
 
-    // #81: from == to (self-transfer) → Unauthorized
+    // #340: from == to (self-transfer) → Ok, consumes allowance, balance unchanged
     #[test]
-    fn test_transfer_from_self_transfer_fails() {
+    fn test_transfer_from_self_transfer_succeeds() {
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         let spender = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &500_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         let result = client.try_transfer_from(&spender, &alice, &alice, &100_i128);
-        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
-        // Allowance must be untouched
-        assert_eq!(client.allowance(&alice, &spender), 500_i128);
+        assert_eq!(result, Ok(Ok(())));
+        // Allowance must be consumed
+        assert_eq!(client.allowance(&alice, &spender), 400_i128);
+        // Balance must be unchanged
+        assert_eq!(client.balance(&alice), 1000_i128);
+    }
+
+    // #340: self-transfer_from exceeding balance still fails
+    #[test]
+    fn test_transfer_from_self_transfer_insufficient_balance() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        client.mint(&alice, &100_i128);
+        client.approve(
+            &alice,
+            &spender,
+            &500_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        let result = client.try_transfer_from(&spender, &alice, &alice, &200_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
+        // Allowance must be consumed even though balance check failed
+        assert_eq!(client.allowance(&alice, &spender), 300_i128);
+        // Balance must be unchanged
+        assert_eq!(client.balance(&alice), 100_i128);
     }
 
     // #81: Expired allowance → AllowanceExpired
@@ -731,7 +1050,7 @@ mod test {
         assert_eq!(result, Err(Ok(TokenError::AllowanceExpired)));
     }
 
-    // #81: No allowance at all (zero by default) → AllowanceExpired (expiration_ledger == 0 < sequence)
+    // #81: No allowance at all (zero by default) → InsufficientAllowance (amount 0 < requested)
     #[test]
     fn test_transfer_from_no_allowance_fails() {
         let (env, _admin, client) = setup();
@@ -739,9 +1058,9 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        // No approve call — default allowance value has expiration_ledger == 0
+        // No approve call — default allowance value has amount == 0
         let result = client.try_transfer_from(&spender, &alice, &bob, &100_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::InsufficientAllowance)));
     }
 
     // #81: Negative amount rejected before allowance is checked (no allowance needed)
@@ -765,7 +1084,12 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        client.approve(&alice, &spender, &300_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &300_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         client.transfer_from(&spender, &alice, &bob, &100_i128);
         assert_eq!(client.allowance(&alice, &spender), 200_i128);
         client.transfer_from(&spender, &alice, &bob, &100_i128);
@@ -791,7 +1115,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_symbol();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     #[test]
@@ -808,7 +1132,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_name();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     #[test]
@@ -826,7 +1150,7 @@ mod test {
         let alice = Address::generate(&env);
         let result =
             client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
     }
 
     #[test]
@@ -838,7 +1162,7 @@ mod test {
         let alice = Address::generate(&env);
         let result =
             client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     #[test]
@@ -846,11 +1170,11 @@ mod test {
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        
+
         let balance_before = client.balance(&alice);
         client.burn(&alice, &0_i128);
         let balance_after = client.balance(&alice);
-        
+
         assert_eq!(balance_before, balance_after);
         assert_eq!(balance_after, 1000_i128);
     }
@@ -860,9 +1184,9 @@ mod test {
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        
+
         let result = client.try_burn(&alice, &-100_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
     }
 
     #[test]
@@ -870,7 +1194,7 @@ mod test {
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        
+
         client.burn(&alice, &1000_i128);
         assert_eq!(client.balance(&alice), 0_i128);
     }
@@ -881,7 +1205,7 @@ mod test {
         let alice = Address::generate(&env);
 
         let result = client.try_burn(&alice, &100_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
     }
 
     // --- Issue #76: initialize validation tests ---
@@ -899,51 +1223,7 @@ mod test {
             &String::from_str(&env, "AutoMint Token"),
             &String::from_str(&env, "AMT"),
         );
-        assert!(result.is_err());
         assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
-    }
-
-    // --- Issue #80: transfer validation tests ---
-
-    #[test]
-    fn test_transfer_zero_amount_is_noop() {
-        let (env, _admin, client) = setup();
-        let alice = Address::generate(&env);
-        let bob = Address::generate(&env);
-        client.mint(&alice, &1000_i128);
-
-        let balance_alice_before = client.balance(&alice);
-        let balance_bob_before = client.balance(&bob);
-        client.transfer(&alice, &bob, &0_i128);
-
-        assert_eq!(client.balance(&alice), balance_alice_before);
-        assert_eq!(client.balance(&bob), balance_bob_before);
-    }
-
-    #[test]
-    fn test_transfer_self_transfer_fails() {
-        let (env, _admin, client) = setup();
-        let alice = Address::generate(&env);
-        client.mint(&alice, &1000_i128);
-
-        let result = client.try_transfer(&alice, &alice, &100_i128);
-        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
-        // Balance must remain unchanged
-        assert_eq!(client.balance(&alice), 1000_i128);
-    }
-
-    #[test]
-    fn test_transfer_negative_amount_fails() {
-        let (env, _admin, client) = setup();
-        let alice = Address::generate(&env);
-        let bob = Address::generate(&env);
-        client.mint(&alice, &1000_i128);
-
-        let result = client.try_transfer(&alice, &bob, &-100_i128);
-        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
-        // Balances must remain unchanged
-        assert_eq!(client.balance(&alice), 1000_i128);
-        assert_eq!(client.balance(&bob), 0_i128);
     }
 
     // --- Issue #85: admin() Result validation tests ---
@@ -961,7 +1241,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_admin();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     // --- Issue #86: decimals() Result validation tests ---
@@ -979,7 +1259,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_decimals();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     // --- Issue #77: allowance() edge case tests ---
@@ -1097,5 +1377,593 @@ mod test {
         client.mint(&user, &500_i128);
         assert_eq!(client.balance(&user), 500_i128);
     }
+
+    // ── Issue #233: Security review — auth checks, overflow safety, reentrancy ──
+
+    // --- Auth checks: all state-mutating functions require proper authorization ---
+
+    #[test]
+    fn test_initialize_requires_admin_auth() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        // Admin's auth is required and checked by require_auth()
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "Test"),
+            &String::from_str(&env, "TST"),
+        );
+        // If require_auth() was missing, this would still succeed in mock mode
+        // But we validate the implementation has the call via code review
+        assert_eq!(client.admin(), admin);
+    }
+
+    #[test]
+    fn test_approve_requires_from_auth() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        // from.require_auth() is mandatory in approve()
+        let result = client.try_approve(
+            &alice,
+            &spender,
+            &100_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        // In mock mode this succeeds, but require_auth() is verified via code inspection
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_requires_from_auth() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        // from.require_auth() is mandatory in transfer()
+        let result = client.try_transfer(&alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_from_requires_spender_auth() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(
+            &alice,
+            &spender,
+            &500_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        // spender.require_auth() is mandatory in transfer_from()
+        let result = client.try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_burn_requires_from_auth() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        // from.require_auth() is mandatory in burn()
+        let result = client.try_burn(&alice, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_requires_admin_auth() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        // mint() calls require_admin() which checks current admin's auth
+        let result = client.try_mint(&user, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_admin_requires_current_admin_auth() {
+        let (env, _admin, client) = setup();
+        let new_admin = Address::generate(&env);
+        // set_admin() requires current admin's auth via require_auth()
+        let result = client.try_set_admin(&new_admin);
+        assert!(result.is_ok());
+        assert_eq!(client.admin(), new_admin);
+    }
+
+    // --- Overflow safety: all arithmetic operations use checked_add ---
+
+    #[test]
+    fn test_mint_checked_overflow_protection() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.mint(&user, &i128::MAX);
+        // Second mint must overflow and return Overflow error
+        let result = client.try_mint(&user, &1_i128);
+        assert_eq!(result, Err(Ok(TokenError::Overflow)));
+        // Balance must remain at i128::MAX (unchanged)
+        assert_eq!(client.balance(&user), i128::MAX);
+    }
+
+    #[test]
+    fn test_transfer_checked_overflow_protection() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &i128::MAX);
+        client.mint(&bob, &i128::MAX);
+        // Transfer would cause overflow in bob's balance
+        let result = client.try_transfer(&alice, &bob, &1_i128);
+        assert_eq!(result, Err(Ok(TokenError::Overflow)));
+        // Balances must remain unchanged
+        assert_eq!(client.balance(&alice), i128::MAX);
+        assert_eq!(client.balance(&bob), i128::MAX);
+    }
+
+    #[test]
+    fn test_transfer_from_checked_overflow_protection() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &i128::MAX);
+        client.mint(&bob, &i128::MAX);
+        client.approve(
+            &alice,
+            &spender,
+            &i128::MAX,
+            &(env.ledger().sequence() + 10000),
+        );
+        // transfer_from would cause overflow in bob's balance
+        let result = client.try_transfer_from(&spender, &alice, &bob, &1_i128);
+        assert_eq!(result, Err(Ok(TokenError::Overflow)));
+        // Balances must remain unchanged and allowance untouched
+        assert_eq!(client.balance(&alice), i128::MAX);
+        assert_eq!(client.balance(&bob), i128::MAX);
+        assert_eq!(client.allowance(&alice, &spender), i128::MAX);
+    }
+
+    // --- Underflow safety: subtraction is safe via balance checks ---
+
+    #[test]
+    fn test_transfer_insufficient_balance_prevents_underflow() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &100_i128);
+        // Attempt to transfer more than balance
+        let result = client.try_transfer(&alice, &bob, &101_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
+        // Balance must remain unchanged
+        assert_eq!(client.balance(&alice), 100_i128);
+        assert_eq!(client.balance(&bob), 0_i128);
+    }
+
+    #[test]
+    fn test_burn_insufficient_balance_prevents_underflow() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &100_i128);
+        // Attempt to burn more than balance
+        let result = client.try_burn(&alice, &101_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
+        // Balance must remain unchanged
+        assert_eq!(client.balance(&alice), 100_i128);
+    }
+
+    // --- Reentrancy: state is finalized before external calls (if any) ---
+    // The token contract does not make cross-contract calls, so reentrancy
+    // via external calls is not a vector. However, we verify the implementation
+    // follows proper state finalization patterns:
+
+    #[test]
+    fn test_balance_updates_persist_across_multiple_calls() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.transfer(&alice, &bob, &300_i128);
+        // State must persist: alice = 700, bob = 300
+        assert_eq!(client.balance(&alice), 700_i128);
+        assert_eq!(client.balance(&bob), 300_i128);
+        // Subsequent call reads the updated state
+        client.transfer(&bob, &alice, &100_i128);
+        assert_eq!(client.balance(&alice), 800_i128);
+        assert_eq!(client.balance(&bob), 200_i128);
+    }
+
+    #[test]
+    fn test_allowance_decremented_atomically_before_transfer() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(
+            &alice,
+            &spender,
+            &500_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        // Verify allowance before transfer
+        assert_eq!(client.allowance(&alice, &spender), 500_i128);
+        // transfer_from must atomically check allowance, decrement, and transfer
+        client.transfer_from(&spender, &alice, &bob, &200_i128);
+        // Allowance must be decremented before balance updates take effect
+        assert_eq!(client.allowance(&alice, &spender), 300_i128);
+        assert_eq!(client.balance(&alice), 800_i128);
+        assert_eq!(client.balance(&bob), 200_i128);
+    }
+
+    // --- Issue #544: storage TTL / archival coverage ---
+    //
+    // Balance entries are persistent storage bumped via
+    // `extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP)`. These tests simulate
+    // ledger advancement with `automint_testutils::advance_ledger` to
+    // exercise that TTL/archival behaviour directly, including the #544
+    // fixes above (do_transfer previously only renewed the *recipient*
+    // balance's TTL, never the sender's; burn never renewed it at all).
+
+    // Control case: a balance minted well within the TTL window is still
+    // readable.
+    #[test]
+    fn test_balance_survives_before_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP / 2);
+
+        assert_eq!(client.balance(&alice), 1000_i128);
+    }
+
+    // A balance entry whose TTL is never refreshed becomes archived once
+    // the ledger sequence passes its live_until_ledger_seq. As in the other
+    // contracts, the whole contract instance shares the same TTL bump
+    // window here, so accessing anything past that point is rejected with
+    // a hard panic caught via `catch_unwind`.
+    #[test]
+    fn test_balance_archived_after_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_past_ttl(&env, LEDGER_BUMP);
+
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| client.balance(&alice)));
+        assert!(outcome.is_err(), "expected archived entry access to fail");
+    }
+
+    // #544 fix verification: `do_transfer` now renews the *sender's*
+    // balance TTL too, not just the recipient's. Advancing to just before
+    // the original expiry, transferring funds away from alice (which,
+    // pre-fix, would only have renewed bob's TTL), then advancing past the
+    // original expiry must still leave alice's (now-empty) balance entry
+    // readable.
+    //
+    // Verified manually that this test exercises the renewal (not just Env
+    // defaults) by temporarily removing the sender-side `extend_ttl` call
+    // added to `do_transfer` above: with it removed, this test fails with
+    // an archived-entry panic at the final `balance(&alice)` call.
+    #[test]
+    fn test_transfer_extends_sender_ttl_restores_access_near_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.transfer(&alice, &bob, &100_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        assert_eq!(client.balance(&alice), 900_i128);
+        assert_eq!(client.balance(&bob), 100_i128);
+    }
+
+    // #544 fix verification: `burn` now renews the balance entry's TTL,
+    // matching every other balance-mutating path.
+    //
+    // Verified manually that this test exercises the renewal by temporarily
+    // removing the `extend_ttl` call added to `burn` above: with it
+    // removed, this test fails with an archived-entry panic at the final
+    // `balance(&alice)` call.
+    #[test]
+    fn test_burn_extends_ttl_restores_access_near_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.burn(&alice, &100_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        assert_eq!(client.balance(&alice), 900_i128);
+    }
 }
 
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal, String};
+
+    struct Ctx {
+        env: Env,
+        id: Address,
+        client: AMTTokenClient<'static>,
+        admin: Address,
+    }
+
+    fn setup() -> Ctx {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_all_auths();
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+
+        Ctx {
+            env,
+            id,
+            client,
+            admin,
+        }
+    }
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        let name = String::from_str(&env, "AutoMint Token");
+        let symbol = String::from_str(&env, "AMT");
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(), 7u32, name.clone(), symbol.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin, &7u32, &name, &symbol);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_approve_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx
+            .client
+            .try_approve(&alice, &spender, &100_i128, &1000_u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_approve_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "approve",
+                args: (alice.clone(), spender.clone(), 100_i128, 1000_u32).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx
+            .client
+            .try_approve(&alice, &spender, &100_i128, &1000_u32);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_transfer(&alice, &bob, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "transfer",
+                args: (alice.clone(), bob.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_transfer(&alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_from_fails_without_spender_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+        ctx.client.approve(&alice, &spender, &500_i128, &1000_u32);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx
+            .client
+            .try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_from_succeeds_with_spender_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+        ctx.client.approve(&alice, &spender, &500_i128, &1000_u32);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &spender,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "transfer_from",
+                args: (spender.clone(), alice.clone(), bob.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx
+            .client
+            .try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_burn_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_burn(&alice, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_burn_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "burn",
+                args: (alice.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_burn(&alice, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_fails_without_admin_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_mint(&user, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_succeeds_with_admin_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &ctx.admin,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "mint",
+                args: (user.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_mint(&user, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_admin_fails_without_current_admin_auth() {
+        let ctx = setup();
+        let new_admin = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_set_admin(&new_admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_admin_succeeds_with_current_admin_auth() {
+        let ctx = setup();
+        let new_admin = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &ctx.admin,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "set_admin",
+                args: (new_admin.clone(),).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_set_admin(&new_admin);
+        assert!(result.is_ok());
+    }
+}

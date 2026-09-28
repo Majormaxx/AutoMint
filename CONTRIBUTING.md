@@ -1,32 +1,116 @@
-# Contributing to AutoMint (testnet-implementation)
+# Contributing to AutoMint
 
-This branch is being rebuilt piece by piece through GitHub Issues. Each issue is scoped to one file or one function/component so multiple people can work in parallel without colliding.
+Thank you for contributing to AutoMint! This codebase is built through open-source GitHub Issues scoped to specific features, components, and contracts.
+
+---
 
 ## Workflow
 
-1. Find an unassigned issue labeled for the area you want to work in (`contract`, `frontend`, `hook`, `component`, `test`, `docs`, `setup`).
-2. Comment `"I'll take this"` on the issue — wait for it to be assigned to you before starting.
-3. Fork the repo (or branch directly if you have write access) from `testnet-implementation`:
+1. **Find an Issue**: Look for unassigned issues using repository labels:
+   - **Area**: `area:contract`, `area:frontend`, `area:docs`, `area:ci`, `area:setup`
+   - **Contract**: `contract:registry`, `contract:bot_nft`, `contract:accrual`, `contract:marketplace`, `contract:token`
+   - **Type**: `type:bug`, `type:feature`, `type:security`, `type:refactor`, `type:docs`
+   - **Difficulty**: `difficulty:easy`, `difficulty:medium`, `difficulty:hard`
+
+2. **Claim the Issue**: Comment `"I'll take this"` on the issue and wait for it to be assigned to you before starting work.
+
+3. **Branch from `main`**:
+
    ```bash
-   git checkout testnet-implementation
-   git pull
+   git checkout main
+   git pull origin main
    git checkout -b <issue-number>-<short-description>
    ```
-4. Implement **only** what the issue describes. Leave the `// TODO` markers in any file your issue doesn't cover.
-5. Run the relevant test suite locally:
+
+4. **Implement Scoped Changes**: Implement **only** what the issue describes. Keep your PR focused and small. If you discover unrelated bugs or improvements, open a separate issue.
+
+5. **Architecture Decision Records (ADRs)**: For changes affecting cross-contract architecture, storage layout, or auth logic, add or update an ADR under `docs/adr/`.
+
+6. **Local Verification**:
+   Run the full verification suite locally before opening a pull request:
+
    ```bash
-   cargo test --workspace          # contract issues
-   cd frontend && npm test          # frontend issues
-   npx tsc --noEmit                 # frontend issues
+   # Rust Smart Contracts - Test Suite
+   cargo test --workspace
+
+   # Rust Smart Contracts - Format Check
+   cargo fmt --check --all
+
+   # Rust Smart Contracts - Linter
+   cargo clippy --all-targets --all-features -- -D warnings
+
+   # Frontend Unit & Component Tests
+   cd frontend && npm test
+
+   # TypeScript Type Checking
+   cd frontend && npm run type-check
+
+   # Frontend Linting
+   cd frontend && npm run lint
    ```
-6. Open a PR **targeting `testnet-implementation`**, not `main`. Title it after the issue, and include `Closes #<issue-number>` in the description.
 
-## Code style
+7. **Dependency Management**:
+   AutoMint pins `soroban-sdk` to an exact patch version and disables its default
+   features so production wasm stays lean and reproducible — see
+   `docs/DEPENDENCIES.md`. 
+   
+   > **Note**: We also pin `stellar-cli` to version `21.4.0`. Install it exactly via:
+   > `cargo install --locked stellar-cli --version 21.4.0 --features opt`
+   
+   Before bumping any dependency, review the diff:
 
-- **Rust**: follow standard `rustfmt` formatting (`cargo fmt`). Contract functions should return `Result<T, Error>` for any fallible operation — no panics on user input.
-- **TypeScript**: match the existing patterns in sibling files (hooks use React Query, components use the MemeFi CSS variable theme in `globals.css`). No `any` types.
-- Keep PRs scoped to the issue. If you spot an unrelated bug, open a new issue instead of fixing it inline.
+   ```bash
+   make deps-check    # `cargo update --dry-run` — prints bumps without touching Cargo.lock
+   ```
 
-## Questions
+   The `dependency-check` CI workflow runs this dry-run on every PR and uploads
+   the result as an artifact, so silent version bumps never land unreviewed.
+   After a reviewed bump, re-record each contract's `wasm_hash` in the deployment
+   manifest (`deployments/<network>.json`).
 
-If an issue's scope is unclear, ask in the issue thread before starting — it's much cheaper to clarify than to redo work.
+8. **Submit Pull Request**:
+   Open a PR **targeting the `main` branch**. Title it after the issue and include `Closes #<issue-number>` in the PR description.
+
+---
+
+## Pre-Commit Hook
+
+Enable the repository pre-commit hook to catch formatting and lint issues automatically:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Never commit `.env*` files (#486)
+
+Every `.env*` file except `frontend/.env.example` must stay local — real
+values (contract IDs, RPC URLs, Sentry tokens) belong in `.env.local`,
+which `.gitignore` already excludes. The pre-commit hook (`scripts/check-env.sh`)
+fails the commit if one is staged anyway (e.g. via `git add -f`), and the
+same check runs in CI on the PR's diff so a bypassed local hook doesn't
+still get through. Run it manually with:
+
+```bash
+cd frontend && npm run check:env
+```
+
+If the hook fires, unstage the file — don't force past it.
+
+---
+
+## Code Style & Enforcement Mechanisms
+
+| Rule                        | Area       | Enforcement Mechanism                                                   |
+| --------------------------- | ---------- | ----------------------------------------------------------------------- |
+| Code Formatting (`rustfmt`) | Rust       | **Machine-enforced in CI** (`cargo fmt --check`)                        |
+| Compiler Lints              | Rust       | **Machine-enforced in CI** (`cargo clippy -- -D warnings`)              |
+| No Panics on User Input     | Rust       | **Review-only** _(Automated clippy lint enforcement landing in AM-223)_ |
+| Static Type Safety          | TypeScript | **Machine-enforced in CI** (`npm run type-check`)                       |
+| Code Linting                | TypeScript | **Machine-enforced in CI** (`npm run lint`)                             |
+| No `any` Types              | TypeScript | **Review-only** _(ESLint rule enforcement landing in AM-223)_           |
+
+---
+
+## Questions & Assistance
+
+If an issue's requirements or scope are unclear, leave a question directly in the issue thread.

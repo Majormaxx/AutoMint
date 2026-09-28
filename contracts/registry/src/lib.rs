@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
@@ -11,10 +13,15 @@ pub enum DataKey {
     UserProfile(Address),
     Username(String),
     // Global storage
-    UserList,
+    /// Bounded leaderboard (#332): `Vec<(Address, u64)>` of at most
+    /// `LEADERBOARD_SIZE` entries, sorted by points descending. Ties: the user
+    /// who reached that total first ranks higher.
+    TopUsers,
     TotalUsers,
     Admin,
     Initialized,
+    // Authorized writer set (accrual + bot_nft) for #318 gating.
+    Writers,
 }
 
 // #39: Define UserProfile struct
@@ -27,6 +34,16 @@ pub struct UserProfile {
     pub claimed_amt: i128,
     pub registered_at: u64,
     pub bot_count: u32,
+}
+
+// #318: authorized writer set. The accrual contract may update points/claimed
+// amounts; the bot_nft contract may update bot counts. Off by default — if the
+// writers are never configured, the gated functions remain open (backward
+// compatible) so existing callers are unaffected until an admin locks them down.
+#[contracttype]
+pub struct Writers {
+    pub accrual: Address,
+    pub bot_nft: Address,
 }
 
 // #38: Define RegistryError enum
@@ -44,6 +61,9 @@ pub enum RegistryError {
 const LEDGER_BUMP: u32 = 120960;
 const LEDGER_THRESHOLD: u32 = 103680;
 
+/// Maximum number of users tracked by the leaderboard (#332).
+pub const LEADERBOARD_SIZE: u32 = 100;
+
 #[contract]
 pub struct RegistryContract;
 
@@ -59,7 +79,7 @@ impl RegistryContract {
         env.storage().instance().set(&DataKey::TotalUsers, &0u32);
         env.storage()
             .instance()
-            .set(&DataKey::UserList, &Vec::<Address>::new(&env));
+            .set(&DataKey::TopUsers, &Vec::<(Address, u64)>::new(&env));
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -68,7 +88,7 @@ impl RegistryContract {
 
     pub fn register(env: Env, user: Address, username: String) -> Result<(), RegistryError> {
         user.require_auth();
-        
+
         // Check if user is already registered
         if env
             .storage()
@@ -77,12 +97,12 @@ impl RegistryContract {
         {
             return Err(RegistryError::AlreadyRegistered);
         }
-        
+
         // Validate username length (empty or too long)
         if username.is_empty() || username.len() > 32 {
             return Err(RegistryError::UsernameTaken);
         }
-        
+
         // Check for username uniqueness
         if env
             .storage()
@@ -91,7 +111,7 @@ impl RegistryContract {
         {
             return Err(RegistryError::UsernameTaken);
         }
-        
+
         // Create new user profile with initial values
         let profile = UserProfile {
             address: user.clone(),
@@ -101,33 +121,33 @@ impl RegistryContract {
             registered_at: env.ledger().timestamp(),
             bot_count: 0,
         };
-        
+
         // Store user profile
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
-        
+
         // Store username mapping
         env.storage()
             .persistent()
             .set(&DataKey::Username(username), &user);
-        
+
         // Extend TTL for user profile
         env.storage().persistent().extend_ttl(
             &DataKey::UserProfile(user.clone()),
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
-        
-        // Add user to the global user list
-        let mut list: Vec<Address> = env
-            .storage()
-            .instance()
-            .get(&DataKey::UserList)
-            .unwrap_or_else(|| Vec::new(&env));
-        list.push_back(user.clone());
-        env.storage().instance().set(&DataKey::UserList, &list);
-        
+
+        // While the leaderboard has room, a new (0-point) user joins at the
+        // end so small deployments still list every registered user in
+        // registration order. Once full, only users who earn points get in.
+        let mut top = Self::load_top(&env);
+        if top.len() < LEADERBOARD_SIZE {
+            top.push_back((user.clone(), 0u64));
+            env.storage().instance().set(&DataKey::TopUsers, &top);
+        }
+
         // Increment total user counter
         let total: u32 = env
             .storage()
@@ -137,18 +157,18 @@ impl RegistryContract {
         env.storage()
             .instance()
             .set(&DataKey::TotalUsers, &(total + 1));
-        
+
         // Extend instance storage TTL
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        
+
         // Emit registration event
         env.events().publish(
             (symbol_short!("register"), user.clone()),
             env.ledger().timestamp(),
         );
-        
+
         Ok(())
     }
 
@@ -163,7 +183,58 @@ impl RegistryContract {
             .ok_or(RegistryError::NotRegistered)
     }
 
+    // #318: Configure the authorized writer set. Admin-only, idempotent. Off by
+    // default until called, then only the configured addresses may mutate gated
+    // fields.
+    pub fn set_writers(env: Env, accrual: Address, bot_nft: Address) -> Result<(), RegistryError> {
+        let admin = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::Admin)
+            .ok_or(RegistryError::Unauthorized)?;
+        admin.require_auth();
+        env.events().publish(
+            (symbol_short!("writers"),),
+            (accrual.clone(), bot_nft.clone()),
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::Writers, &Writers { accrual, bot_nft });
+        Ok(())
+    }
+
+    pub fn get_writers(env: Env) -> Option<Writers> {
+        env.storage().instance().get(&DataKey::Writers)
+    }
+
+    fn require_accrual(env: &Env) -> Result<(), RegistryError> {
+        if let Some(writers) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Writers>(&DataKey::Writers)
+        {
+            writers.accrual.require_auth();
+        }
+        Ok(())
+    }
+
+    fn require_bot_nft(env: &Env) -> Result<(), RegistryError> {
+        if let Some(writers) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Writers>(&DataKey::Writers)
+        {
+            writers.bot_nft.require_auth();
+        }
+        Ok(())
+    }
+
     pub fn add_points(env: Env, user: Address, points: u64) -> Result<(), RegistryError> {
+        // #318: only the configured accrual writer may mutate points.
+        Self::require_accrual(&env)?;
+        // SECURITY NOTE: This function modifies user state. It should only be called
+        // from the accrual contract (which has already verified user authorization).
+        // In a production deployment, consider validating caller identity.
         let mut profile: UserProfile = env
             .storage()
             .persistent()
@@ -181,12 +252,18 @@ impl RegistryContract {
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+        Self::update_top(&env, &user, profile.total_points);
         env.events()
             .publish((symbol_short!("addpoints"), user), points);
         Ok(())
     }
 
     pub fn increment_bot_count(env: Env, user: Address) -> Result<(), RegistryError> {
+        // #318: only the configured bot_nft writer may mutate bot counts.
+        Self::require_bot_nft(&env)?;
+        // SECURITY NOTE: This function modifies user state. It should only be called
+        // from the bot_nft contract (which has already verified user authorization).
+        // In a production deployment, consider validating caller identity.
         let mut profile: UserProfile = env
             .storage()
             .persistent()
@@ -228,6 +305,11 @@ impl RegistryContract {
     }
 
     pub fn add_claimed_amt(env: Env, user: Address, amount: i128) -> Result<(), RegistryError> {
+        // #318: only the configured accrual writer may mutate claimed amounts.
+        Self::require_accrual(&env)?;
+        // SECURITY NOTE: This function modifies user state. It should only be called
+        // from the accrual contract (which has already verified user authorization).
+        // In a production deployment, consider validating caller identity.
         let mut profile: UserProfile = env
             .storage()
             .persistent()
@@ -248,41 +330,78 @@ impl RegistryContract {
         Ok(())
     }
 
-    // Bubble sort in-contract — gas bounded by user count
-    pub fn get_leaderboard(env: Env, limit: u32) -> Vec<UserProfile> {
-        if limit == 0 {
-            return Vec::new(&env);
-        }
-        let list: Vec<Address> = env
-            .storage()
+    fn load_top(env: &Env) -> Vec<(Address, u64)> {
+        env.storage()
             .instance()
-            .get(&DataKey::UserList)
-            .unwrap_or_else(|| Vec::new(&env));
-        let mut profiles: Vec<UserProfile> = Vec::new(&env);
-        for addr in list.iter() {
+            .get(&DataKey::TopUsers)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Incrementally maintain the bounded top-N list (#332). Cost is O(N) with
+    /// N = `LEADERBOARD_SIZE`, independent of total user count. Points only
+    /// ever increase, so a user already listed is moved up; an unlisted user
+    /// enters only if the list has room or strictly beats the current floor
+    /// (a tie with the floor keeps the incumbent, who reached the total first).
+    fn update_top(env: &Env, user: &Address, new_total: u64) {
+        let mut top = Self::load_top(env);
+
+        let mut was_listed = false;
+        let mut i = 0;
+        while i < top.len() {
+            if top.get(i).unwrap().0 == *user {
+                top.remove(i);
+                was_listed = true;
+                break;
+            }
+            i += 1;
+        }
+
+        if !was_listed && top.len() >= LEADERBOARD_SIZE {
+            let floor = top.last().map(|e| e.1).unwrap_or(0);
+            if new_total <= floor {
+                return; // list unchanged (nothing was removed)
+            }
+        }
+
+        // Insert after every entry with points >= new_total (stable ties).
+        let mut pos = top.len();
+        let mut k = 0;
+        while k < top.len() {
+            if top.get(k).unwrap().1 < new_total {
+                pos = k;
+                break;
+            }
+            k += 1;
+        }
+        top.insert(pos, (user.clone(), new_total));
+        if top.len() > LEADERBOARD_SIZE {
+            top.pop_back();
+        }
+        env.storage().instance().set(&DataKey::TopUsers, &top);
+    }
+
+    /// Top users by points, highest first. Reads the maintained `TopUsers`
+    /// list and hydrates at most `min(limit, LEADERBOARD_SIZE)` profiles, so the
+    /// cost does not depend on the total number of users. Equal totals are
+    /// ordered by who reached the total first (earlier wins), deterministically.
+    pub fn get_leaderboard(env: Env, limit: u32) -> Vec<UserProfile> {
+        let mut result: Vec<UserProfile> = Vec::new(&env);
+        if limit == 0 {
+            return result;
+        }
+        let top = Self::load_top(&env);
+        let take = limit.min(LEADERBOARD_SIZE);
+        for (addr, _) in top.iter() {
+            if result.len() >= take {
+                break;
+            }
             if let Some(p) = env
                 .storage()
                 .persistent()
-                .get::<_, UserProfile>(&DataKey::UserProfile(addr.clone()))
+                .get::<_, UserProfile>(&DataKey::UserProfile(addr))
             {
-                profiles.push_back(p);
+                result.push_back(p);
             }
-        }
-        let n = profiles.len();
-        for i in 0..n {
-            for j in 0..n.saturating_sub(i).saturating_sub(1) {
-                let a = profiles.get(j).unwrap();
-                let b = profiles.get(j + 1).unwrap();
-                if a.total_points < b.total_points {
-                    profiles.set(j, b);
-                    profiles.set(j + 1, a);
-                }
-            }
-        }
-        let take = limit.min(n) as usize;
-        let mut result: Vec<UserProfile> = Vec::new(&env);
-        for i in 0..take {
-            result.push_back(profiles.get(i as u32).unwrap());
         }
         result
     }
@@ -296,7 +415,7 @@ impl RegistryContract {
             .unwrap_or(0)
     }
 
-    pub fn admin(env: Env) -> Result<Address, RegistryError> {
+    pub fn get_admin(env: Env) -> Result<Address, RegistryError> {
         env.storage()
             .instance()
             .get(&DataKey::Admin)
@@ -305,9 +424,15 @@ impl RegistryContract {
 }
 
 #[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, MockAuth, MockAuthInvoke},
+        Env, IntoVal, String,
+    };
 
     fn setup() -> (Env, Address, RegistryContractClient<'static>) {
         let env = Env::default();
@@ -316,7 +441,55 @@ mod test {
         let client = RegistryContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         client.initialize(&admin);
+        // Configure writers so the gated path is exercised under mock_all_auths.
+        let accrual = Address::generate(&env);
+        let bot_nft = Address::generate(&env);
+        client.set_writers(&accrual, &bot_nft);
         (env, admin, client)
+    }
+
+    // #318: a non-writer (root caller) must be rejected by add_points.
+    #[test]
+    fn test_add_points_unauthorized_fails() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Auth"));
+        env.mock_auths(&[]);
+        let result = client.try_add_points(&user, &10_u64);
+        assert!(result.is_err());
+    }
+
+    // #318: a non-writer (root caller) must be rejected by add_claimed_amt.
+    #[test]
+    fn test_add_claimed_amt_unauthorized_fails() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Auth"));
+        env.mock_auths(&[]);
+        let result = client.try_add_claimed_amt(&user, &10_i128);
+        assert!(result.is_err());
+    }
+
+    // #318: the configured accrual writer succeeds (same authorization check the
+    // accrual contract hits when it calls add_points).
+    #[test]
+    fn test_add_points_by_writer_direct_succeeds() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Auth"));
+        let registry_id = client.address.clone();
+        let writers = client.get_writers().unwrap();
+        env.mock_auths(&[MockAuth {
+            address: &writers.accrual,
+            invoke: &MockAuthInvoke {
+                contract: &registry_id,
+                fn_name: "add_points",
+                args: (user.clone(), 10_u64).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        client.add_points(&user, &10_u64);
+        assert_eq!(client.get_user(&user).total_points, 10);
     }
 
     // #40: Test register success
@@ -338,9 +511,8 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         client.register(&user, &String::from_str(&env, "Alice"));
-        assert!(client
-            .try_register(&user, &String::from_str(&env, "Alice2"))
-            .is_err());
+        let result = client.try_register(&user, &String::from_str(&env, "Alice2"));
+        assert_eq!(result, Err(Ok(RegistryError::AlreadyRegistered)));
     }
 
     // #40: Test username collision
@@ -350,9 +522,8 @@ mod test {
         let user1 = Address::generate(&env);
         let user2 = Address::generate(&env);
         client.register(&user1, &String::from_str(&env, "Bob"));
-        assert!(client
-            .try_register(&user2, &String::from_str(&env, "Bob"))
-            .is_err());
+        let result = client.try_register(&user2, &String::from_str(&env, "Bob"));
+        assert_eq!(result, Err(Ok(RegistryError::UsernameTaken)));
     }
 
     // #40: Test invalid username (empty)
@@ -360,9 +531,8 @@ mod test {
     fn test_empty_username_fails() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
-        assert!(client
-            .try_register(&user, &String::from_str(&env, ""))
-            .is_err());
+        let result = client.try_register(&user, &String::from_str(&env, ""));
+        assert_eq!(result, Err(Ok(RegistryError::UsernameTaken)));
     }
 
     // #40: Test invalid username (too long)
@@ -371,7 +541,8 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         let long_name = String::from_str(&env, "thisistoolongusernamethatexceedsthelimit");
-        assert!(client.try_register(&user, &long_name).is_err());
+        let result = client.try_register(&user, &long_name);
+        assert_eq!(result, Err(Ok(RegistryError::UsernameTaken)));
     }
 
     // #40: Test add_points accumulation
@@ -411,7 +582,8 @@ mod test {
     fn test_get_user_not_found() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_get_user(&ghost).is_err());
+        let result = client.try_get_user(&ghost);
+        assert!(matches!(result, Err(Ok(RegistryError::NotRegistered))));
     }
 
     #[test]
@@ -466,6 +638,71 @@ mod test {
         assert_eq!(lb.len(), 0);
     }
 
+    // #332: 500 users; only the bounded top-N is maintained and returned.
+    #[test]
+    fn test_leaderboard_500_users_top_10_ordered() {
+        let (env, _admin, client) = setup();
+        env.budget().reset_unlimited();
+        let mut addrs = std::vec::Vec::new();
+        for i in 0..500u32 {
+            let u = Address::generate(&env);
+            let name = std::format!("user{}", i);
+            client.register(&u, &String::from_str(&env, &name));
+            // Distinct totals, deliberately not in registration order.
+            let pts = ((i * 37) % 500 + 1) as u64;
+            client.add_points(&u, &pts);
+            addrs.push((u, pts));
+        }
+        let lb = client.get_leaderboard(&10_u32);
+        assert_eq!(lb.len(), 10);
+        let mut expected: std::vec::Vec<u64> = addrs.iter().map(|(_, p)| *p).collect();
+        expected.sort_by(|a, b| b.cmp(a));
+        for k in 0..10u32 {
+            assert_eq!(lb.get(k).unwrap().total_points, expected[k as usize]);
+        }
+        // Never more than LEADERBOARD_SIZE, even when asked for everything.
+        assert_eq!(client.get_leaderboard(&1000_u32).len(), LEADERBOARD_SIZE);
+    }
+
+    // #332: a listed user moving up, and a newcomer evicting the floor.
+    #[test]
+    fn test_leaderboard_eviction_and_reordering() {
+        let (env, _admin, client) = setup();
+        env.budget().reset_unlimited();
+        let mut users = std::vec::Vec::new();
+        for i in 0..(LEADERBOARD_SIZE + 5) {
+            let u = Address::generate(&env);
+            client.register(&u, &String::from_str(&env, &std::format!("u{}", i)));
+            client.add_points(&u, &10_u64);
+            users.push(u);
+        }
+        // Board is full of 10-pointers; a late 10-pointer did not displace anyone.
+        let lb = client.get_leaderboard(&LEADERBOARD_SIZE);
+        assert_eq!(lb.len(), LEADERBOARD_SIZE);
+        assert!(lb.iter().all(|p| p.address != users[LEADERBOARD_SIZE as usize]));
+        // A late user beating the floor gets in at the top and evicts the last.
+        client.add_points(&users[LEADERBOARD_SIZE as usize + 1], &1000_u64);
+        let lb = client.get_leaderboard(&LEADERBOARD_SIZE);
+        assert_eq!(lb.get(0).unwrap().address, users[LEADERBOARD_SIZE as usize + 1]);
+        assert_eq!(lb.len(), LEADERBOARD_SIZE);
+        assert!(lb.iter().all(|p| p.address != users[LEADERBOARD_SIZE as usize - 1]));
+    }
+
+    // #332: equal totals rank by who reached the total first.
+    #[test]
+    fn test_leaderboard_tie_order_is_first_to_reach() {
+        let (env, _admin, client) = setup();
+        let a = Address::generate(&env);
+        let b = Address::generate(&env);
+        client.register(&a, &String::from_str(&env, "ta"));
+        client.register(&b, &String::from_str(&env, "tb"));
+        client.add_points(&b, &50_u64);
+        client.add_points(&a, &50_u64);
+        let lb = client.get_leaderboard(&2_u32);
+        assert_eq!(lb.get(0).unwrap().address, b);
+        assert_eq!(lb.get(1).unwrap().address, a);
+    }
+
     #[test]
     fn test_increment_bot_count_from_zero() {
         let (env, _admin, client) = setup();
@@ -506,7 +743,7 @@ mod test {
     #[test]
     fn test_admin_returns_current_admin() {
         let (_env, admin, client) = setup();
-        assert_eq!(client.admin(), admin);
+        assert_eq!(client.get_admin(), admin);
     }
 
     // Test double-initialization fails with the AlreadyInitialized variant
@@ -524,15 +761,15 @@ mod test {
     #[test]
     fn test_initialize_sets_admin() {
         let (_env, admin, client) = setup();
-        assert_eq!(client.admin(), admin);
+        assert_eq!(client.get_admin(), admin);
     }
 
     // #37: Test admin persists across calls
     #[test]
     fn test_admin_persists() {
         let (_env, admin, client) = setup();
-        let retrieved_admin1 = client.admin();
-        let retrieved_admin2 = client.admin();
+        let retrieved_admin1 = client.get_admin();
+        let retrieved_admin2 = client.get_admin();
         assert_eq!(retrieved_admin1, admin);
         assert_eq!(retrieved_admin2, admin);
         assert_eq!(retrieved_admin1, retrieved_admin2);
@@ -543,7 +780,8 @@ mod test {
         let env = Env::default();
         let id = env.register_contract(None, RegistryContract);
         let client = RegistryContractClient::new(&env, &id);
-        assert!(client.try_admin().is_err());
+        let result = client.try_get_admin();
+        assert_eq!(result, Err(Ok(RegistryError::NotInitialized)));
     }
 
     #[test]
@@ -551,7 +789,7 @@ mod test {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
         let result = client.try_get_user(&ghost);
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Ok(RegistryError::NotRegistered))));
     }
 
     #[test]
@@ -583,7 +821,8 @@ mod test {
     fn test_add_claimed_amt_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_add_claimed_amt(&ghost, &100_i128).is_err());
+        let result = client.try_add_claimed_amt(&ghost, &100_i128);
+        assert_eq!(result, Err(Ok(RegistryError::NotRegistered)));
     }
 
     #[test]
@@ -610,7 +849,8 @@ mod test {
     fn test_add_points_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_add_points(&ghost, &100_u64).is_err());
+        let result = client.try_add_points(&ghost, &100_u64);
+        assert_eq!(result, Err(Ok(RegistryError::NotRegistered)));
     }
 
     #[test]
@@ -714,10 +954,10 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         let username = String::from_str(&env, "testuser");
-        
+
         client.register(&user, &username);
         let profile = client.get_user(&user);
-        
+
         assert_eq!(profile.address, user);
         assert_eq!(profile.username, username);
         assert_eq!(profile.total_points, 0);
@@ -731,11 +971,11 @@ mod test {
     fn test_register_increments_total_users() {
         let (env, _admin, client) = setup();
         let initial_count = client.total_users();
-        
+
         let user1 = Address::generate(&env);
         client.register(&user1, &String::from_str(&env, "user1"));
         assert_eq!(client.total_users(), initial_count + 1);
-        
+
         let user2 = Address::generate(&env);
         client.register(&user2, &String::from_str(&env, "user2"));
         assert_eq!(client.total_users(), initial_count + 2);
@@ -746,10 +986,10 @@ mod test {
         let (env, _admin, client) = setup();
         let user1 = Address::generate(&env);
         let user2 = Address::generate(&env);
-        
+
         client.register(&user1, &String::from_str(&env, "TestUser"));
         client.register(&user2, &String::from_str(&env, "testuser"));
-        
+
         // Both should succeed since usernames are case-sensitive
         let profile1 = client.get_user(&user1);
         let profile2 = client.get_user(&user2);
@@ -941,5 +1181,225 @@ mod test {
         client.add_claimed_amt(&user, &50_i128);
         client.increment_bot_count(&user);
         assert_eq!(client.total_users(), 1);
+    }
+
+    // --- Issue #544: storage TTL / archival coverage ---
+    //
+    // UserProfile is written to *persistent* storage and its TTL is bumped
+    // via `extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP)` on every write. If that
+    // TTL is allowed to lapse, the entry becomes archived and inaccessible —
+    // exactly the class of bug behind AM-028/AM-048/AM-080. These tests
+    // simulate ledger advancement with `automint_testutils::advance_ledger`
+    // to exercise that behaviour directly instead of only trusting the SDK's
+    // (non-expiring, by default) test `Env`.
+
+    // Control case: well within the TTL window, the profile must still be
+    // readable.
+    #[test]
+    fn test_user_profile_survives_before_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Ttl1"));
+
+        // Advance by less than LEDGER_BUMP — well before expiry.
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP / 2);
+
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, String::from_str(&env, "Ttl1"));
+    }
+
+    // An entry whose TTL is never refreshed becomes archived once the
+    // ledger sequence passes its live_until_ledger_seq (write time +
+    // LEDGER_BUMP, set by both `register`'s persistent- and instance-level
+    // `extend_ttl` calls). Once archived, reading it must fail rather than
+    // silently returning stale/missing data.
+    //
+    // The test harness escalates archived-entry access to a hard panic
+    // (matching mainnet: an archived entry means the transaction never
+    // reaches the contract at all), even through `try_*` client methods, so
+    // we assert on that panic via `catch_unwind` instead of a `Result`.
+    #[test]
+    fn test_user_profile_archived_after_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Ttl2"));
+
+        automint_testutils::advance_past_ttl(&env, LEDGER_BUMP);
+
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| client.get_user(&user)));
+        assert!(outcome.is_err(), "expected archived entry access to fail");
+    }
+
+    // Calling a function that touches the profile (and therefore calls
+    // `extend_ttl` again, e.g. `add_points`) shortly before expiry must
+    // reset the TTL clock, so the entry survives past what would have been
+    // its original expiry ledger.
+    //
+    // Note: the *contract instance* (Admin/Initialized/TotalUsers/TopUsers)
+    // has its own independent TTL, bumped only by `initialize`/`register`.
+    // To isolate the behaviour we care about (the user profile's TTL
+    // renewal), this test also registers a second, unrelated "keepalive"
+    // user at the same checkpoint purely to keep the instance itself alive
+    // — without that, the whole contract instance would archive first and
+    // mask the assertion we're actually after.
+    //
+    // Verified manually that this test actually exercises the renewal (not
+    // just Env defaults) by temporarily removing the
+    // `env.storage().persistent().extend_ttl(...)` call for
+    // `DataKey::UserProfile` inside `add_points`: with it removed, this
+    // test fails with an archived-entry panic at the final `get_user`,
+    // confirming the assertion is meaningful and not just passing by
+    // default.
+    #[test]
+    fn test_extend_ttl_call_restores_access_near_expiry() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Ttl3"));
+
+        // Advance to just before the original expiry ledger, then touch the
+        // entry via add_points (renews the profile TTL) and register a
+        // throwaway user (renews the instance TTL).
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.add_points(&user, &10_u64);
+        let keepalive = Address::generate(&env);
+        client.register(&keepalive, &String::from_str(&env, "Keepalive"));
+
+        // Advance well past what would have been the *original* expiry
+        // ledger (write time + LEDGER_BUMP). Without the renewal above, the
+        // profile entry would now be archived.
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, String::from_str(&env, "Ttl3"));
+        assert_eq!(profile.total_points, 10);
+    }
+}
+
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal, String};
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize(&admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_register_fails_without_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+
+        let user = Address::generate(&env);
+        let username = String::from_str(&env, "alice");
+        // No authorizations mocked for the upcoming call — `user` has not
+        // authorized `register`, so it must fail.
+        env.mock_auths(&[]);
+        let result = client.try_register(&user, &username);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_register_succeeds_with_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+
+        let user = Address::generate(&env);
+        let username = String::from_str(&env, "alice");
+        env.mock_auths(&[MockAuth {
+            address: &user,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "register",
+                args: (user.clone(), username.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_register(&user, &username);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_decrement_bot_count_fails_without_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "bob"));
+
+        env.mock_auths(&[]);
+        let result = client.try_decrement_bot_count(&user);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decrement_bot_count_succeeds_with_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "bob"));
+
+        env.mock_auths(&[MockAuth {
+            address: &user,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "decrement_bot_count",
+                args: (user.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_decrement_bot_count(&user);
+        assert!(result.is_ok());
     }
 }

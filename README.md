@@ -1,127 +1,222 @@
-# AutoMint — testnet-implementation
+# AutoMint — Stellar Soroban Testnet Implementation
+
+[![Contracts CI](https://github.com/Alaka-ibr/AutoMint/actions/workflows/ci.yml/badge.svg)](https://github.com/Alaka-ibr/AutoMint/actions/workflows/ci.yml)
+[![Frontend Tests](https://github.com/Alaka-ibr/AutoMint/actions/workflows/frontend-tests.yml/badge.svg)](https://github.com/Alaka-ibr/AutoMint/actions/workflows/frontend-tests.yml)
+[![Mutation Testing](https://github.com/Alaka-ibr/AutoMint/actions/workflows/mutation-testing.yml/badge.svg)](https://github.com/Alaka-ibr/AutoMint/actions/workflows/mutation-testing.yml)
 
 **Idle auto-mining dApp on Stellar (Soroban).**
-Deploy NFT bots that accrue `$AMT` tokens 24/7. No tapping. Trade bots on a P2P marketplace. Compete on an on-chain leaderboard.
-
-This branch is a **bare scaffold**. The folder structure, configs, and dependency manifests are in place — the actual contract logic and frontend code have been stripped out into `// TODO` placeholders. Every file maps to one or more issues on the [Issues tab](../../issues). Pick an issue, implement just that piece, and open a PR against this branch.
-
-> Looking for the finished reference build? See the `main` branch.
+Deploy NFT bots that accrue `$AMT` tokens 24/7. No active tapping required. Trade bots on an on-chain P2P escrow marketplace and compete on a global leaderboard.
 
 ---
 
-## How it works (target behavior)
+## Repository Status Overview
 
-```
-Register  ──► registry.register()
-          ──► bot_nft.mint_basic()    (free Basic Bot)
-          ──► accrual.start_accrual()
+The `testnet-implementation` branch contains a fully implemented, working testnet codebase (~10,000 lines of code across smart contracts, Next.js frontend, unit test suites, and GitHub Actions CI pipelines).
 
-Every second (client-side interpolated):
-  pending = (now − last_claim_ts) × total_rate / 3600
+### Contract Status Table
 
-Claim     ──► accrual.claim()
-          ──► registry.add_points()
-          ──► token.mint()            if points ≥ 100
+| Contract | Path | Language | Implementation Status | Test Coverage | Key Features |
+|---|---|---|---|---|---|
+| **Registry** | `contracts/registry/` | Rust | Production-ready | Comprehensive | Profile registration, unique usernames, points ledger, leaderboard sorting |
+| **BotNFT** | `contracts/bot_nft/` | Rust | Production-ready | Comprehensive | Sequential minting, 5 bot tiers, ownership transfer, TTL renewal |
+| **Accrual** | `contracts/accrual/` | Rust | Production-ready | Comprehensive | Time-based point math, $AMT mint redemption, threshold logic |
+| **Marketplace**| `contracts/marketplace/` | Rust | Production-ready | Comprehensive | P2P bot escrow, positive price validation, 2.5% admin fee, cancellation |
+| **AMT Token** | `contracts/token/` | Rust | Production-ready | Comprehensive | SEP-41 compliant token, minting, burning, allowances, set_admin transfer |
+| **Testutils** | `contracts/testutils/` | Rust | Production-ready | Internal | Shared ledger time advance helpers (`advance_ledger`, `advance_past_ttl`) |
 
-Marketplace:
-  list    ──► bot_nft.transfer(seller → marketplace)   escrow
-  buy     ──► token.transfer(buyer → seller + fee)
-          ──► bot_nft.transfer(marketplace → buyer)
-```
+### Frontend Status Table
 
-## Bot Tiers
-
-| Tier    | Price         | Rate       |
-|---------|---------------|------------|
-| Basic   | Free          | 1 pt/hr    |
-| Bronze  | 500 XLM       | 5 pt/hr    |
-| Silver  | 2,000 XLM     | 25 pt/hr   |
-| Gold    | 7,500 XLM     | 100 pt/hr  |
-| Diamond | 25,000 XLM    | 500 pt/hr  |
-
-100 points = 1 `$AMT` on claim. Marketplace fee: 2.5%.
+| Frontend Component | Path | Tech Stack | Implementation Status | Test Suite | Description |
+|---|---|---|---|---|---|
+| **App Router Pages** | `frontend/src/app/` | Next.js 14 | Complete | Integration Tests | Landing page, Dashboard, Marketplace, Leaderboard, Profile |
+| **UI & Layout** | `frontend/src/components/` | React 18, Tailwind | Complete | Component Tests | Header, Footer, Modals, Skeleton loaders, Bot Cards, Counters |
+| **React Query Hooks** | `frontend/src/hooks/` | TanStack Query | Complete | Hook Unit Tests | `useWallet`, `useAccrual`, `useMarketplace`, `useLeaderboard`, `useBotDetails` |
+| **Stellar SDK Client** | `frontend/src/lib/` | `@stellar/stellar-sdk` | Complete | Smoke & SDK Tests | RPC retry wrappers (`rpcRetry.ts`), contract callers (`contracts.ts`) |
+| **Wallet Store** | `frontend/src/store/` | Zustand | Complete | Store Unit Tests | Client-side wallet state, active public key, network passphrase |
 
 ---
 
-## Repo layout
+## How It Works
 
+```mermaid
+flowchart TD
+    subgraph 1. Onboarding
+        A[Register User Profile] -->|registry.register| B[Profile Active]
+        B -->|bot_nft.mint_basic| C[Basic Bot Claimed]
+        C -->|accrual.start_accrual| D[Accrual Running 24/7]
+    end
+
+    subgraph 2. Idle Mining
+        D -->|Client Interpolation| E["Pending Points = (now - last_claim) * rate / 3600"]
+        E -->|accrual.claim| F[Claim Points & Mint $AMT Tokens]
+    end
+
+    subgraph 3. P2P Marketplace
+        F -->|Purchase Tier Bots| G[Upgrade Mining Rate]
+        G -->|marketplace.list_bot| H[Escrow Bot NFT]
+        H -->|marketplace.buy_bot| I[Transfer NFT & Payments]
+    end
 ```
-contracts/
-  token/        AMT token contract        (Soroban, Rust)
-  registry/     usernames + point totals
-  bot_nft/      bot ownership + tiers
-  accrual/      point accrual math + claims
-  marketplace/  P2P escrow trading
 
-frontend/
-  src/app/            Next.js App Router pages
-  src/components/     UI components
-  src/hooks/          React Query hooks (data + mutations)
-  src/lib/            stellar.ts (RPC/Freighter), contracts.ts (contract calls)
-  src/store/          Zustand wallet store
-  src/types/          shared TypeScript types
-```
+### Bot Tiers & Mining Rates
 
-Every `.rs`/`.ts`/`.tsx` file under `contracts/` and `frontend/src/` currently contains only a `// TODO` stub. Config files (`Cargo.toml`, `package.json`, `tsconfig.json`, etc.) are untouched and functional.
+| Tier | Price | Mining Rate | Points Required for 1 `$AMT` |
+|---|---|---|---|
+| **Basic** | Free | 1 pt/hr | 100 points |
+| **Bronze** | 500 XLM | 5 pt/hr | 100 points |
+| **Silver** | 2,000 XLM | 25 pt/hr | 100 points |
+| **Gold** | 7,500 XLM | 100 pt/hr | 100 points |
+| **Diamond** | 25,000 XLM | 500 pt/hr | 100 points |
+
+*Marketplace Trading Fee: 2.5% (250 bps).*
 
 ---
 
-## Getting started
+## Repository Structure
 
-```bash
-# 1. Fork the repo, then clone your fork
-git clone https://github.com/<your-username>/AutoMint.git
-cd AutoMint
-git checkout testnet-implementation
-
-# 2. Rust + Stellar CLI (only needed for contract issues)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup target add wasm32v1-none
-cargo install --locked stellar-cli --features opt
-
-# 3. Frontend (only needed for frontend issues)
-cd frontend
-npm install
-cp .env.example .env.local   # fill in contract IDs once deployed
-npm run dev                  # http://localhost:3000
+```
+AutoMint/
+├── contracts/                  # Soroban Smart Contracts (Rust)
+│   ├── accrual/                # Point accrual math & token mint claims
+│   ├── bot_nft/                # NFT bot minting, tiers & ownership
+│   ├── marketplace/            # P2P bot NFT escrow marketplace
+│   ├── registry/               # User profiles, usernames & leaderboard
+│   ├── testutils/              # Shared dev testing utilities (TTL & time advance)
+│   └── token/                  # SEP-41 compliant AMT token contract
+├── frontend/                   # Next.js 14 Frontend Application
+│   ├── src/app/                # App Router pages & layout
+│   ├── src/components/         # UI, Layout, Dashboard, Marketplace, Leaderboard components
+│   ├── src/hooks/              # React Query state & mutation hooks
+│   ├── src/lib/                # Stellar SDK, RPC retry logic & contract clients
+│   ├── src/store/              # Zustand wallet store
+│   └── src/types/              # Shared TypeScript domain interfaces
+├── docs/                       # Project Documentation
+│   ├── ARCHITECTURE.md         # Call graphs, auth matrix, storage layout & events (#212, #566)
+│   ├── DEPLOY.md               # Contract deployment runbook: keys, deploy.sh, verification (#217)
+│   ├── DEPLOYMENT.md           # Frontend hosting, env vars & CI preview deployments
+│   ├── MANUAL_TEST_REPORT.md   # Testnet end-to-end manual verification checklists
+│   ├── ONBOARDING.md           # Developer codebase reading order guide (#250)
+│   └── FLOWS.md                # Sequence flows for core user journeys
+├── scripts/                    # Build & Deployment Automation
+│   ├── deploy.sh               # Contract build, deployment & initialization script
+│   │                           #   (crash-resilient manifest + --dry-run/--force, #557)
+│   └── verify-deployment.sh    # Reproducible-build wasm hash verifier (#559)
+├── indexer/                    # Soroban event indexer + aggregate API + ops dashboard (#563)
+│   ├── src/                    # poller, decoder, SQLite store, Express API
+│   ├── public/index.html       # ops dashboard
+│   └── docs/EVENTS.md          # every indexed event schema
+├── deployments/                # gitignored per-network manifests (deploy.sh output)
+├── CHANGELOG.md                # Release & milestone changelog (#246)
+└── Cargo.toml                  # Cargo workspace manifest
 ```
 
-Install [Freighter](https://freighter.app) wallet and switch it to **Testnet** for frontend work.
+---
 
-## Picking up an issue
+## Getting Started
 
-1. Browse [open issues](../../issues) — each one names the exact file and function/component to implement, with the expected behavior described.
-2. Comment on the issue to get it assigned to you, so no one else duplicates the work.
-3. Branch off `testnet-implementation`:
+### Prerequisites
+- **Rust & Soroban CLI** (for contract development):
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  rustup target add wasm32v1-none
+  cargo install --locked stellar-cli --version 21.4.0 --features opt
+  ```
+- **Node.js 18+ & npm** (for frontend development):
+  ```bash
+  node -v
+  npm -v
+  ```
+- **Freighter Wallet**: Install the [Freighter extension](https://freighter.app) and set network to **Testnet**.
+
+---
+
+### Step-by-Step Installation & Local Setup
+
+1. **Clone the Repository**:
    ```bash
-   git checkout -b issue-123-implement-claim testnet-implementation
+   git clone https://github.com/Alaka-ibr/AutoMint.git
+   cd AutoMint
+   git checkout testnet-implementation
    ```
-4. Implement only what the issue asks for. Don't touch unrelated files — other issues depend on them staying untouched until their own PR lands.
-5. Open a PR **against `testnet-implementation`** (not `main`), referencing the issue number (`Closes #123`).
 
-## Tests
+2. **Run Contract Tests**:
+   ```bash
+   cargo test --workspace
+   ```
+
+3. **Install & Launch Frontend**:
+   ```bash
+   cd frontend
+   npm install
+   cp .env.example .env.local
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+4. **Deploy Contracts to Testnet (Optional)**:
+   ```bash
+   # Generate testnet identity and fund via Friendbot
+   stellar keys generate mykey --network testnet
+   curl "https://friendbot.stellar.org/?addr=$(stellar keys address mykey)"
+   
+   # Run automated deploy & initialize script
+   ./scripts/deploy.sh testnet mykey
+   ```
+   The deployment script automatically populates `frontend/.env.local` with the new contract IDs.
+
+---
+
+## Testing & CI Discipline
+
+All PRs undergo automated CI checks on GitHub Actions:
 
 ```bash
-# Contracts (Rust)
+# Smart Contract Tests (Rust Workspace)
 cargo test --workspace
 
-# Frontend (Jest + RTL)
+# Frontend Unit & Integration Tests (Jest + React Testing Library)
 cd frontend && npm test
+
+# Bundle Budget & Polyfill Validation
+cd frontend && npm run check-bundle-size
 ```
 
-No CI is configured on this branch — run tests locally before opening a PR.
+Automated CI Workflows:
+- `.github/workflows/ci.yml`: Cargo workspace test suite.
+- `.github/workflows/frontend-tests.yml`: Frontend Jest suite with jsdom polyfills & Stellar SDK smoke test.
+- `.github/workflows/mutation-testing.yml`: Cargo mutants test execution.
+- `.github/workflows/frontend-bundle-budget.yml`: Size limits enforcer.
 
-## Deploy contracts (once implemented)
+---
 
-```bash
-stellar keys generate mykey --network testnet
-curl "https://friendbot.stellar.org/?addr=$(stellar keys address mykey)"
-./scripts/deploy.sh testnet mykey
-```
+## Branching & Pull Request Guidelines
 
-## Stack
+1. **Base Branch**: Always branch off **`main`**.
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b fix/your-feature-name
+   ```
+2. **PR Target Branch**: Open your Pull Request targeting **`main`**.
+3. **Commit Standard**: Write clean, descriptive commit messages describing what was modified and referencing issue numbers (`Closes #123`).
 
-- **Contracts** — Rust, Soroban SDK 21, `wasm32v1-none` target
-- **Frontend** — Next.js 14, Tailwind, Zustand, React Query, Framer Motion
-- **Wallet** — Freighter (Stellar browser extension), `@stellar/freighter-api` v3
-- **Network** — Stellar Testnet, Soroban RPC
+---
+
+## Documentation Links
+
+- [Contract Architecture Specification](docs/ARCHITECTURE.md) (`docs/ARCHITECTURE.md`)
+- [Contract Deployment Runbook](docs/DEPLOY.md) (`docs/DEPLOY.md`)
+- [Developer Onboarding Guide](docs/ONBOARDING.md) (`docs/ONBOARDING.md`)
+- [Sequence & Journey Flows](docs/FLOWS.md) (`docs/FLOWS.md`)
+- [Frontend Deployment & CI Preview Documentation](docs/DEPLOYMENT.md) (`docs/DEPLOYMENT.md`) — includes the `deployments/<network>.json` manifest schema and reproducible-build verification (#557/#559)
+- [Testnet Manual Test Report](docs/MANUAL_TEST_REPORT.md) (`docs/MANUAL_TEST_REPORT.md`)
+- [Dependency Policy](docs/DEPENDENCIES.md) (`docs/DEPENDENCIES.md`) — exact `soroban-sdk` pin and `testutils` feature rationale (#562)
+- [Indexer README](indexer/README.md) — run the event indexer, aggregate API & ops dashboard (#563)
+- [Indexed Event Schemas](indexer/docs/EVENTS.md) — every event the indexer consumes (#563)
+- [Project Changelog](CHANGELOG.md) (`CHANGELOG.md`)
+
+---
+
+## License
+
+Apache License 2.0 (Apache-2.0). See [LICENSE](LICENSE) for details.
