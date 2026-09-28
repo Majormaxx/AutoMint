@@ -94,6 +94,7 @@ pub enum AccrualError {
     NoBots = 9,
     TooManyUsers = 10,
     NotRegistered = 11,
+    Frozen = 12,
 }
 
 fn get_reg_err_code(
@@ -125,6 +126,29 @@ fn get_token_err_code(
 const LEDGER_BUMP: u32 = 120960;
 const LEDGER_THRESHOLD: u32 = 103680;
 
+fn require_admin(env: &Env) -> Result<(), AccrualError> {
+    let admin: Address = env
+        .storage()
+        .instance()
+        .get(&DataKey::Admin)
+        .ok_or(AccrualError::NotInitialized)?;
+    admin.require_auth();
+    Ok(())
+}
+
+fn is_frozen(env: &Env, user: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Frozen(user.clone()))
+        .unwrap_or(false)
+}
+
+fn require_unfrozen(env: &Env, user: &Address) -> Result<(), AccrualError> {
+    if is_frozen(env, user) {
+        return Err(AccrualError::Frozen);
+    }
+    Ok(())
+}
 #[contract]
 pub struct AccrualContract;
 
@@ -178,7 +202,26 @@ impl AccrualContract {
         Ok(())
     }
 
+    pub fn freeze(env: Env, user: Address) -> Result<(), AccrualError> {
+        require_admin(&env)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Frozen(user.clone()), &true);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Frozen(user.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.events().publish((symbol_short!("freeze"), user), true);
+        Ok(())
+    }
+
+    pub fn unfreeze(env: Env, user: Address) -> Result<(), AccrualError> {
+        require_admin(&env)?;
+        env.storage().persistent().remove(&DataKey::Frozen(user.clone()));
+        env.events().publish((symbol_short!("freeze"), user), false);
+        Ok(())
+    }
     pub fn sync_rate(env: Env, user: Address) -> Result<u64, AccrualError> {
+        require_unfrozen(&env, &user)?;
         let Some(mut accrual) = env.storage().persistent().get::<_, UserAccrual>(&DataKey::UserAccrual(user.clone())) else {
             return Ok(0);
         };
@@ -338,6 +381,7 @@ impl AccrualContract {
         registry: Address,
     ) -> Result<i128, AccrualError> {
         user.require_auth();
+        require_unfrozen(&env, &user)?;
 
         if env.storage().temporary().has(&DataKey::ReentrancyGuard) {
             return Ok(0);
