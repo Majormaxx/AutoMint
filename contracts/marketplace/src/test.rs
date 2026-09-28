@@ -56,7 +56,7 @@ fn test_list_bot_escrows_and_returns_id() {
 
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(listing_id, 1);
 
     // The bot is escrowed into the marketplace contract.
@@ -82,10 +82,10 @@ fn test_list_bot_ids_are_sequential() {
 
     let l1 = h
         .mkt
-        .list_bot(&seller, &id1, &10_0000000_i128, &h.token.address);
+        .list_bot(&seller, &id1, &10_0000000_i128, &h.token.address, &604_800_u64);
     let l2 = h
         .mkt
-        .list_bot(&seller, &id2, &20_0000000_i128, &h.token.address);
+        .list_bot(&seller, &id2, &20_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(l1, 1);
     assert_eq!(l2, 2);
 
@@ -240,7 +240,7 @@ fn test_buy_bot_pays_seller_minus_fee_and_transfers_bot() {
     h.token.mint(&buyer, &price);
 
     let bot_id = h.bot.mint_basic(&seller);
-    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
 
     let seller_balance_before = h.token.balance(&seller);
     let admin_balance_before = h.token.balance(&h.admin);
@@ -273,7 +273,7 @@ fn test_cancel_listing_returns_bot_to_seller() {
     let bot_id = h.bot.mint_basic(&seller);
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address, &604_800_u64);
 
     // Bot is escrowed
     assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
@@ -299,7 +299,7 @@ fn test_buy_inactive_listing_fails() {
 
     h.token.mint(&buyer, &(price * 2));
     let bot_id = h.bot.mint_basic(&seller);
-    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
 
     // Cancel the listing first
     h.mkt.cancel_listing(&seller, &listing_id);
@@ -318,7 +318,7 @@ fn test_cancel_already_cancelled_listing_fails() {
     let bot_id = h.bot.mint_basic(&seller);
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address, &604_800_u64);
 
     h.mkt.cancel_listing(&seller, &listing_id);
 
@@ -346,7 +346,7 @@ fn test_cancel_listing_by_non_seller_fails() {
     let bot_id = h.bot.mint_basic(&seller);
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address, &604_800_u64);
 
     assert_eq!(
         h.mkt.try_cancel_listing(&stranger, &listing_id),
@@ -424,7 +424,7 @@ fn test_bot_nft_marketplace_integration_listing_escrows_bot() {
     // List the bot at a price
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(listing_id, 1);
 
     // Verify bot is now escrowed (owner is marketplace contract)
@@ -450,7 +450,7 @@ fn test_bot_nft_marketplace_integration_cancel_returns_escrowed_bot() {
     let bot_id = h.bot.mint_basic(&seller);
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address, &604_800_u64);
 
     // Verify bot is escrowed
     assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
@@ -479,7 +479,7 @@ fn test_bot_nft_marketplace_integration_escrowed_bot_cannot_be_listed_again() {
     // List the bot
     let _listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address, &604_800_u64);
 
     // Verify seller no longer owns the bot
     assert_eq!(h.bot.get_user_bots(&seller).len(), 0);
@@ -520,7 +520,7 @@ fn test_marketplace_token_registry_integration_full_sale_with_updates() {
     // Seller lists the bot at price on marketplace
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_nft_id, &price, &h.token.address);
+        .list_bot(&seller, &bot_nft_id, &price, &h.token.address, &604_800_u64);
 
     // Verify bot is escrowed
     assert_eq!(h.bot.get_bot(&bot_nft_id).owner, h.mkt.address);
@@ -575,8 +575,8 @@ fn test_marketplace_token_registry_integration_multiple_purchases() {
     let bot_id2 = h.bot.mint_basic(&seller);
 
     // List both bots
-    let listing_id1 = h.mkt.list_bot(&seller, &bot_id1, &price, &h.token.address);
-    let listing_id2 = h.mkt.list_bot(&seller, &bot_id2, &price, &h.token.address);
+    let listing_id1 = h.mkt.list_bot(&seller, &bot_id1, &price, &h.token.address, &604_800_u64);
+    let listing_id2 = h.mkt.list_bot(&seller, &bot_id2, &price, &h.token.address, &604_800_u64);
 
     // Verify both are escrowed and active
     assert_eq!(h.bot.get_bot(&bot_id1).owner, h.mkt.address);
@@ -702,7 +702,7 @@ mod auth_tests {
         let bot_id = h.bot.mint_basic(&seller);
         let listing_id = h
             .mkt
-            .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+            .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address, &604_800_u64);
 
         h.env.mock_auths(&[]);
         let result = h.mkt.try_cancel_listing(&seller, &listing_id);
@@ -716,7 +716,7 @@ mod auth_tests {
         let bot_id = h.bot.mint_basic(&seller);
         let listing_id = h
             .mkt
-            .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+            .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address, &604_800_u64);
 
         h.env.mock_auths(&[MockAuth {
             address: &seller,
@@ -739,7 +739,7 @@ mod auth_tests {
         let price = 100_0000000_i128;
         h.token.mint(&buyer, &price);
         let bot_id = h.bot.mint_basic(&seller);
-        let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+        let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
 
         h.env.mock_auths(&[]);
         let result = h.mkt.try_buy_bot(&buyer, &listing_id);
@@ -754,7 +754,7 @@ mod auth_tests {
         let price = 100_0000000_i128;
         h.token.mint(&buyer, &price);
         let bot_id = h.bot.mint_basic(&seller);
-        let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+        let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
 
         // `buy_bot` pays the seller and the admin fee via cross-contract
         // calls into `token.transfer(buyer, ..., ...)`, which itself calls
@@ -801,13 +801,13 @@ fn test_next_listing_id_starts_at_one_and_increments() {
     let id1 = h.bot.mint_basic(&seller);
     let l1 = h
         .mkt
-        .list_bot(&seller, &id1, &50_0000000_i128, &h.token.address);
+        .list_bot(&seller, &id1, &50_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(l1, 1);
     assert_eq!(h.mkt.next_listing_id(), 2);
     let id2 = h.bot.mint_basic(&seller);
     let l2 = h
         .mkt
-        .list_bot(&seller, &id2, &50_0000000_i128, &h.token.address);
+        .list_bot(&seller, &id2, &50_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(l2, 2);
     assert_eq!(h.mkt.next_listing_id(), 3);
 }
@@ -821,7 +821,7 @@ fn test_get_listing_historical_remains_readable_after_buy_and_cancel() {
     let bot1 = h.bot.mint_basic(&seller);
     let l1 = h
         .mkt
-        .list_bot(&seller, &bot1, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot1, &100_0000000_i128, &h.token.address, &604_800_u64);
     h.mkt.buy_bot(&buyer, &l1);
     let hist1 = h.mkt.get_listing(&l1);
     assert!(!hist1.active);
@@ -833,7 +833,7 @@ fn test_get_listing_historical_remains_readable_after_buy_and_cancel() {
     let bot2 = h.bot.mint_basic(&seller);
     let l2 = h
         .mkt
-        .list_bot(&seller, &bot2, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot2, &100_0000000_i128, &h.token.address, &604_800_u64);
     h.mkt.cancel_listing(&seller, &l2);
     let hist2 = h.mkt.get_listing(&l2);
     assert!(!hist2.active);
@@ -919,7 +919,7 @@ fn test_fee_always_at_least_one_for_any_accepted_price() {
         let fee = price * 250 / 10_000;
         assert!(fee >= 1, "price {} fee {} should be >=1", price, fee);
         let bot = h.bot.mint_basic(&seller);
-        let listing = h.mkt.list_bot(&seller, &bot, &price, &h.token.address);
+        let listing = h.mkt.list_bot(&seller, &bot, &price, &h.token.address, &604_800_u64);
         let buyer = Address::generate(&h.env);
         h.token.mint(&buyer, &(price));
         let admin_before = h.token.balance(&h.admin);
@@ -971,7 +971,7 @@ fn test_buy_stale_listing_fails_before_payment_and_marks_inactive() {
     let price = 100_0000000_i128;
     h.token.mint(&buyer, &price);
     let bot_id = h.bot.mint_basic(&seller);
-    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
     assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
     // Manually reassign bot out of marketplace (simulate admin action / bug)
     h.bot.transfer(&bot_id, &h.mkt.address, &seller);
@@ -1007,7 +1007,7 @@ fn test_fee_boundary_prices() {
         Err(Ok(MarketplaceError::PriceTooLow))
     );
     let bot_ok = h.bot.mint_basic(&seller);
-    let l40 = h.mkt.list_bot(&seller, &bot_ok, &40_i128, &h.token.address);
+    let l40 = h.mkt.list_bot(&seller, &bot_ok, &40_i128, &h.token.address, &604_800_u64);
     h.token.mint(&buyer, &40_i128);
     let admin_before = h.token.balance(&h.admin);
     h.mkt.buy_bot(&buyer, &l40);
@@ -1029,7 +1029,7 @@ fn test_buyer_exactly_enough_and_one_short() {
     let seller = Address::generate(&h.env);
     let price = 1000_0000000_i128;
     let bot1 = h.bot.mint_basic(&seller);
-    let l1 = h.mkt.list_bot(&seller, &bot1, &price, &h.token.address);
+    let l1 = h.mkt.list_bot(&seller, &bot1, &price, &h.token.address, &604_800_u64);
     let buyer_ok = Address::generate(&h.env);
     h.token.mint(&buyer_ok, &price);
     let res_ok = h.mkt.try_buy_bot(&buyer_ok, &l1);
@@ -1037,7 +1037,7 @@ fn test_buyer_exactly_enough_and_one_short() {
     assert_eq!(h.token.balance(&buyer_ok), 0);
     let seller2 = Address::generate(&h.env);
     let bot2 = h.bot.mint_basic(&seller2);
-    let l2 = h.mkt.list_bot(&seller2, &bot2, &price, &h.token.address);
+    let l2 = h.mkt.list_bot(&seller2, &bot2, &price, &h.token.address, &604_800_u64);
     let buyer_short = Address::generate(&h.env);
     h.token.mint(&buyer_short, &(price - 1));
     let res_short = h.mkt.try_buy_bot(&buyer_short, &l2);
@@ -1060,7 +1060,7 @@ fn test_self_purchase_fails_with_self_purchase_error() {
     let bot = h.bot.mint_basic(&seller);
     let l = h
         .mkt
-        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(
         h.mkt.try_buy_bot(&seller, &l),
         Err(Ok(MarketplaceError::SelfPurchase))
@@ -1078,7 +1078,7 @@ fn test_double_purchase_of_one_listing_fails() {
     h.token.mint(&buyer1, &price);
     h.token.mint(&buyer2, &price);
     let bot = h.bot.mint_basic(&seller);
-    let l = h.mkt.list_bot(&seller, &bot, &price, &h.token.address);
+    let l = h.mkt.list_bot(&seller, &bot, &price, &h.token.address, &604_800_u64);
     h.mkt.buy_bot(&buyer1, &l);
     assert!(!h.mkt.get_listing(&l).active);
     let res2 = h.mkt.try_buy_bot(&buyer2, &l);
@@ -1094,7 +1094,7 @@ fn test_cancel_then_buy_race_fails() {
     let price = 100_0000000_i128;
     h.token.mint(&buyer, &price);
     let bot = h.bot.mint_basic(&seller);
-    let l = h.mkt.list_bot(&seller, &bot, &price, &h.token.address);
+    let l = h.mkt.list_bot(&seller, &bot, &price, &h.token.address, &604_800_u64);
     h.mkt.cancel_listing(&seller, &l);
     assert!(!h.mkt.get_listing(&l).active);
     assert_eq!(h.bot.get_bot(&bot).owner, seller);
@@ -1303,7 +1303,7 @@ fn test_error_variant_listing_not_active() {
     let bot = h.bot.mint_basic(&seller);
     let l = h
         .mkt
-        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address, &604_800_u64);
     h.mkt.cancel_listing(&seller, &l);
     assert_eq!(
         h.mkt.try_buy_bot(&buyer, &l),
@@ -1330,7 +1330,7 @@ fn test_error_variant_unauthorized() {
     let bot = h.bot.mint_basic(&seller);
     let l = h
         .mkt
-        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(
         h.mkt.try_cancel_listing(&stranger, &l),
         Err(Ok(MarketplaceError::Unauthorized))
@@ -1345,7 +1345,7 @@ fn test_error_variant_self_purchase() {
     let bot = h.bot.mint_basic(&seller);
     let l = h
         .mkt
-        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(
         h.mkt.try_buy_bot(&seller, &l),
         Err(Ok(MarketplaceError::SelfPurchase))
@@ -1360,7 +1360,7 @@ fn test_error_variant_payment_failed() {
     let bot = h.bot.mint_basic(&seller);
     let l = h
         .mkt
-        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address, &604_800_u64);
     assert_eq!(
         h.mkt.try_buy_bot(&buyer, &l),
         Err(Ok(MarketplaceError::PaymentFailed))
@@ -1390,7 +1390,7 @@ fn test_error_variant_listing_stale() {
     let bot = h.bot.mint_basic(&seller);
     let l = h
         .mkt
-        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot, &100_0000000_i128, &h.token.address, &604_800_u64);
     h.bot.transfer(&bot, &h.mkt.address, &seller);
     assert_eq!(
         h.mkt.try_buy_bot(&buyer, &l),
@@ -1604,7 +1604,7 @@ fn test_e2e_five_contract_full_flow() {
     let fee_bps = marketplace.config().fee_bps; // 250
     let expected_fee = price * fee_bps as i128 / 10_000;
     assert_eq!(expected_fee, 2_5000000, "fee should be 2.5 AMT at 250 bps");
-    let listing_id = marketplace.list_bot(&alice, &gold_id, &price, &deployment.token_id);
+    let listing_id = marketplace.list_bot(&alice, &gold_id, &price, &deployment.token_id, &604_800_u64);
     assert_eq!(listing_id, 1, "first listing should be id 1");
 
     // Invariants after listing: escrow.
@@ -1816,12 +1816,12 @@ fn test_listing_count_decreases_on_cancel() {
     let bot1 = h.bot.mint_basic(&seller);
     let listing1 = h
         .mkt
-        .list_bot(&seller, &bot1, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot1, &100_0000000_i128, &h.token.address, &604_800_u64);
 
     let bot2 = h.bot.mint_basic(&seller);
     let listing2 = h
         .mkt
-        .list_bot(&seller, &bot2, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot2, &100_0000000_i128, &h.token.address, &604_800_u64);
 
     assert_eq!(
         h.mkt.get_user_active_listing_count(&seller),
@@ -1856,12 +1856,12 @@ fn test_listing_count_decreases_on_purchase() {
     let bot1 = h.bot.mint_basic(&seller);
     let listing1 = h
         .mkt
-        .list_bot(&seller, &bot1, &price, &h.token.address);
+        .list_bot(&seller, &bot1, &price, &h.token.address, &604_800_u64);
 
     let bot2 = h.bot.mint_basic(&seller);
     let listing2 = h
         .mkt
-        .list_bot(&seller, &bot2, &price, &h.token.address);
+        .list_bot(&seller, &bot2, &price, &h.token.address, &604_800_u64);
 
     h.token.mint(&buyer, &(price * 2));
 
@@ -1906,7 +1906,7 @@ fn test_transfer_listed_bot_deactivates_listing() {
     let bot_id = h.bot.mint_basic(&seller);
 
     h.bot.set_marketplace(&h.mkt.address);
-    let listing_id = h.mkt.list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+    let listing_id = h.mkt.list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address, &604_800_u64);
 
     // Transferring the listed bot to recipient notifies on_bot_moved
     h.bot.transfer(&bot_id, &h.mkt.address, &recipient);
@@ -1952,8 +1952,8 @@ fn test_tier_stats_follow_a_scripted_sequence_of_sales() {
 
     let bot_a = h.bot.mint_basic(&seller);
     let bot_b = h.bot.mint_basic(&seller);
-    let cheap = h.mkt.list_bot(&seller, &bot_a, &40_0000000_i128, &h.token.address);
-    let dear = h.mkt.list_bot(&seller, &bot_b, &60_0000000_i128, &h.token.address);
+    let cheap = h.mkt.list_bot(&seller, &bot_a, &40_0000000_i128, &h.token.address, &604_800_u64);
+    let dear = h.mkt.list_bot(&seller, &bot_b, &60_0000000_i128, &h.token.address, &604_800_u64);
 
     // The floor is the cheapest active listing.
     assert_eq!(h.mkt.tier_stats(&BotTier::Basic).floor_price, 40_0000000_i128);
@@ -1985,8 +1985,8 @@ fn test_floor_updates_when_the_cheapest_listing_is_cancelled_or_repriced() {
     let seller = Address::generate(&h.env);
     let bot_a = h.bot.mint_basic(&seller);
     let bot_b = h.bot.mint_basic(&seller);
-    let cheap = h.mkt.list_bot(&seller, &bot_a, &40_0000000_i128, &h.token.address);
-    let dear = h.mkt.list_bot(&seller, &bot_b, &60_0000000_i128, &h.token.address);
+    let cheap = h.mkt.list_bot(&seller, &bot_a, &40_0000000_i128, &h.token.address, &604_800_u64);
+    let dear = h.mkt.list_bot(&seller, &bot_b, &60_0000000_i128, &h.token.address, &604_800_u64);
 
     // Repricing the cheapest above the other moves the floor.
     h.mkt.update_price(&seller, &cheap, &80_0000000_i128);
@@ -2011,7 +2011,7 @@ fn test_non_seller_gets_unauthorized_whatever_the_listing_state() {
     let bot_id = h.bot.mint_basic(&seller);
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address, &604_800_u64);
 
     // Active listing.
     assert_eq!(
@@ -2048,7 +2048,7 @@ fn test_seller_cannot_buy_own_listing_whatever_its_state() {
     let bot_id = h.bot.mint_basic(&seller);
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address, &604_800_u64);
     h.mkt.cancel_listing(&seller, &listing_id);
 
     assert_eq!(
@@ -2069,7 +2069,7 @@ fn test_pause_blocks_trading_but_not_cancel_listing() {
     let bot_b = h.bot.mint_basic(&seller);
     let listing_id = h
         .mkt
-        .list_bot(&seller, &bot_a, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_a, &100_0000000_i128, &h.token.address, &604_800_u64);
 
     h.mkt.pause();
     assert!(h.mkt.is_paused());
@@ -2095,7 +2095,7 @@ fn test_pause_blocks_trading_but_not_cancel_listing() {
     h.mkt.unpause();
     assert!(!h.mkt.is_paused());
     h.mkt
-        .list_bot(&seller, &bot_b, &100_0000000_i128, &h.token.address);
+        .list_bot(&seller, &bot_b, &100_0000000_i128, &h.token.address, &604_800_u64);
 }
 
 #[test]
@@ -2128,7 +2128,7 @@ fn test_buy_conserves_price_and_admin_gets_exact_fee() {
     let buyer = Address::generate(&h.env);
     let price = 1000_0000000_i128;
     let bot_id = h.bot.mint_basic(&seller);
-    let l = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+    let l = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
     h.token.mint(&buyer, &price);
 
     let fee = price * cfg.fee_bps as i128 / 10_000;
@@ -2152,7 +2152,7 @@ fn test_buy_one_short_keeps_listing_and_escrow() {
     let buyer = Address::generate(&h.env);
     let price = 1000_0000000_i128;
     let bot_id = h.bot.mint_basic(&seller);
-    let l = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+    let l = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
     h.token.mint(&buyer, &(price - 1));
 
     assert_eq!(
@@ -2290,7 +2290,7 @@ fn test_cancel_cost_does_not_rebuild_index() {
     let h = setup();
     let seller = Address::generate(&h.env);
     let bot = h.bot.mint_basic(&seller);
-    let l = h.mkt.list_bot(&seller, &bot, &100_0000000_i128, &h.token.address);
+    let l = h.mkt.list_bot(&seller, &bot, &100_0000000_i128, &h.token.address, &604_800_u64);
     h.mkt.cancel_listing(&seller, &l);
     assert!(!h.mkt.get_listing(&l).active);
     assert_eq!(h.mkt.get_active_listings(&0, &10).0.len(), 0);

@@ -174,6 +174,10 @@ pub struct Listing {
     pub currency: Address,
     pub listed_at: u64,
     pub active: bool,
+    /// Unix timestamp (seconds) after which the listing is considered expired.
+    /// `buy_bot` rejects purchases past this time; `reclaim_expired` returns
+    /// the bot to the seller. Bounded to 1–90 days from `listed_at` (#423).
+    pub expires_at: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -237,6 +241,7 @@ pub enum MarketplaceError {
     NotBotOwner = 21,
     Reentrancy = 22,  // #326: Reentrancy guard
     UnsupportedCurrency = 23,  // #325: Currency allowlist
+    ListingExpired = 24,  // #423: listing expiry
 }
 
 /// Every bot tier, in order, for per-tier reporting.
@@ -368,6 +373,7 @@ impl MarketplaceContract {
         bot_id: u64,
         price: i128,
         currency: Address,
+        duration_secs: u64,
     ) -> Result<u64, MarketplaceError> {
         Self::check_and_set_lock(&env)?;
 
@@ -375,6 +381,14 @@ impl MarketplaceContract {
         if let Err(e) = Self::require_not_paused(&env) {
             Self::clear_lock(&env);
             return Err(e);
+        }
+
+        // duration_secs must be between 1 day and 90 days (#423).
+        const MIN_DURATION: u64 = 86_400;       // 1 day
+        const MAX_DURATION: u64 = 86_400 * 90;  // 90 days
+        if duration_secs < MIN_DURATION || duration_secs > MAX_DURATION {
+            Self::clear_lock(&env);
+            return Err(MarketplaceError::InvalidPrice);
         }
 
         // A listing must have a strictly positive price.
@@ -458,6 +472,7 @@ impl MarketplaceContract {
             .get(&DataKey::NextListingId)
             .unwrap_or(1);
 
+        let now = env.ledger().timestamp();
         let listing = Listing {
             id: listing_id,
             seller: seller.clone(),
@@ -465,8 +480,9 @@ impl MarketplaceContract {
             bot_tier,
             price,
             currency: currency.clone(),
-            listed_at: env.ledger().timestamp(),
+            listed_at: now,
             active: true,
+            expires_at: now.saturating_add(duration_secs),
         };
         env.storage()
             .persistent()
@@ -547,6 +563,11 @@ impl MarketplaceContract {
         if !listing.active {
             Self::clear_lock(&env);
             return Err(MarketplaceError::ListingNotActive);
+        }
+        // Reject purchases on expired listings (#423).
+        if env.ledger().timestamp() > listing.expires_at {
+            Self::clear_lock(&env);
+            return Err(MarketplaceError::ListingExpired);
         }
         let config: Config = match env.storage().instance().get(&DataKey::Config) {
             Some(c) => c,
@@ -810,6 +831,76 @@ impl MarketplaceContract {
 
         env.events().publish(
             (symbol_short!("cancel"), seller, listing_id),
+            listing.bot_id,
+        );
+        Self::clear_lock(&env);
+        Ok(())
+    }
+
+    /// Permissionless: return an expired, still-active listing's escrowed bot
+    /// to the original seller. Anyone may trigger this; the bot always returns
+    /// to the seller, never to the caller (#423).
+    pub fn reclaim_expired(env: Env, listing_id: u64) -> Result<(), MarketplaceError> {
+        Self::check_and_set_lock(&env)?;
+
+        let mut listing: Listing = match env.storage().persistent().get(&DataKey::Listing(listing_id)) {
+            Some(l) => l,
+            None => {
+                Self::clear_lock(&env);
+                return Err(MarketplaceError::ListingNotFound);
+            }
+        };
+
+        if !listing.active {
+            Self::clear_lock(&env);
+            return Err(MarketplaceError::ListingNotActive);
+        }
+
+        if env.ledger().timestamp() <= listing.expires_at {
+            Self::clear_lock(&env);
+            return Err(MarketplaceError::ListingNotActive); // not yet expired
+        }
+
+        let config: Config = match env.storage().instance().get(&DataKey::Config) {
+            Some(c) => c,
+            None => {
+                Self::clear_lock(&env);
+                return Err(MarketplaceError::NotInitialized);
+            }
+        };
+
+        // Return the escrowed bot to the original seller, not the caller.
+        let marketplace = env.current_contract_address();
+        let bot_client = BotNFTContractClient::new(&env, &config.bot_nft);
+        if bot_client
+            .try_transfer(&listing.bot_id, &marketplace, &listing.seller)
+            .is_err()
+        {
+            Self::clear_lock(&env);
+            return Err(MarketplaceError::BotTransferFailed);
+        }
+
+        listing.active = false;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Listing(listing_id), &listing);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Listing(listing_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        env.storage()
+            .persistent()
+            .remove(&DataKey::BotListing(listing.bot_id));
+
+        Self::on_listing_removed(&env, &listing);
+        Self::decrement_user_active_listing_count(&env, &listing.seller);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        env.events().publish(
+            (Symbol::new(&env, "reclaimed"), listing.seller.clone(), listing_id),
             listing.bot_id,
         );
         Self::clear_lock(&env);
