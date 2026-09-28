@@ -34,6 +34,7 @@ pub enum DataKey {
     BotNft,
     Registry,
     UserAccrual(Address),
+    ReentrancyGuard,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -61,6 +62,7 @@ pub struct UserAccrual {
     pub carry_points: u64,
     pub lifetime_points: u64,
     pub started_at: u64,
+    pub leftover: u64,
 }
 
 impl From<UserAccrual> for AccrualState {
@@ -188,12 +190,18 @@ impl AccrualContract {
     /// `registry.add_points` with no actionable error.
     pub fn start_accrual(env: Env, user: Address) -> Result<(), AccrualError> {
         user.require_auth();
-        if env
+        let now = env.ledger().timestamp();
+        if let Some(mut accrual) = env
             .storage()
             .persistent()
-            .has(&DataKey::UserAccrual(user.clone()))
+            .get::<_, UserAccrual>(&DataKey::UserAccrual(user.clone()))
         {
-            return Err(AccrualError::AlreadyStarted);
+            accrual.rate = rate;
+            env.storage()
+                .persistent()
+                .set(&DataKey::UserAccrual(user.clone()), &accrual);
+            env.events().publish((symbol_short!("sync"), user), rate);
+            return Ok(());
         }
         let registry: Address = env
             .storage()
@@ -216,10 +224,17 @@ impl AccrualContract {
         let accrual = UserAccrual {
             user: user.clone(),
             rate,
+ 400-402-406-407-accrual-fixes
+            last_claim_ts: now,
+            total_claimed_points: 0,
+            started_at: now,
+            leftover: 0,
+
             last_claim_ts: env.ledger().timestamp(),
             carry_points: 0,
             lifetime_points: 0,
             started_at: env.ledger().timestamp(),
+ testnet-implementation
         };
         env.storage()
             .persistent()
@@ -231,7 +246,7 @@ impl AccrualContract {
         );
         env.events().publish(
             (symbol_short!("start"), user.clone()),
-            env.ledger().timestamp(),
+            now,
         );
         Ok(())
     }
@@ -246,7 +261,7 @@ impl AccrualContract {
             .ledger()
             .timestamp()
             .saturating_sub(accrual.last_claim_ts) as u128;
-        Ok(elapsed.saturating_mul(accrual.rate as u128) / 3600)
+        Ok((elapsed.saturating_mul(accrual.rate as u128) + accrual.leftover as u128) / 3600)
     }
 
     /// Seconds until the next AMT token will be earned. Returns 0 if the user
@@ -311,6 +326,11 @@ impl AccrualContract {
     ) -> Result<i128, AccrualError> {
         user.require_auth();
 
+        if env.storage().temporary().has(&DataKey::ReentrancyGuard) {
+            return Ok(0);
+        }
+        env.storage().temporary().set(&DataKey::ReentrancyGuard, &true);
+
         let accrual: UserAccrual = env
             .storage()
             .persistent()
@@ -319,7 +339,11 @@ impl AccrualContract {
 
         let current_ts = env.ledger().timestamp();
         let elapsed = current_ts.saturating_sub(accrual.last_claim_ts);
-        let pending = elapsed.saturating_mul(accrual.rate) / 3600;
+        let total_numerator = elapsed
+            .saturating_mul(accrual.rate)
+            .saturating_add(accrual.leftover);
+        let pending = total_numerator / 3600;
+        let leftover = total_numerator % 3600;
 
         let config: Config = env
             .storage()
@@ -333,11 +357,28 @@ impl AccrualContract {
         // Number of AMT tokens to mint
         let amt_to_mint = updated_carry / config.points_per_amt;
 
+ 400-402-406-407-accrual-fixes
+        // Carry forward points below the mint threshold and fractional accrual.
+        let remaining_points = updated_points % config.points_per_amt;
+
         // Carry forward only leftover points
         let remaining_carry = updated_carry % config.points_per_amt;
 
         // Lifetime points accumulation
         let updated_lifetime = accrual.lifetime_points.saturating_add(pending);
+ testnet-implementation
+
+        let updated_accrual = UserAccrual {
+            user: accrual.user,
+            rate: accrual.rate,
+            last_claim_ts: current_ts,
+            total_claimed_points: remaining_points,
+            started_at: accrual.started_at,
+            leftover,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAccrual(user.clone()), &updated_accrual);
 
         let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
 
@@ -372,19 +413,6 @@ impl AccrualContract {
                 .publish((symbol_short!("mint"), user.clone()), amt_to_mint as i128);
         }
 
-        // Persist state only after all external calls succeed
-        let updated_accrual = UserAccrual {
-            user: accrual.user,
-            rate: accrual.rate,
-            last_claim_ts: current_ts,
-            carry_points: remaining_carry,
-            lifetime_points: updated_lifetime,
-            started_at: accrual.started_at,
-        };
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::UserAccrual(user.clone()), &updated_accrual);
         env.storage().persistent().extend_ttl(
             &DataKey::UserAccrual(user.clone()),
             LEDGER_THRESHOLD,
@@ -402,8 +430,39 @@ impl AccrualContract {
         Ok(pending as i128)
     }
 
-    pub fn get_accrual_admin(env: Env) -> Address {
-        env.storage().instance().get(&DataKey::Admin).unwrap()
+    pub fn get_accrual_admin(env: Env) -> Result<Address, AccrualError> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(AccrualError::NotInitialized)
+    }
+
+    pub fn stop_accrual(
+        env: Env,
+        user: Address,
+        registry: Address,
+    ) -> Result<(), AccrualError> {
+        user.require_auth();
+        let accrual: UserAccrual = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserAccrual(user.clone()))
+            .ok_or(AccrualError::NotStarted)?;
+        let current_ts = env.ledger().timestamp();
+        let elapsed = current_ts.saturating_sub(accrual.last_claim_ts);
+        let total_numerator = elapsed
+            .saturating_mul(accrual.rate)
+            .saturating_add(accrual.leftover);
+        let pending = total_numerator / 3600;
+        if pending > 0 {
+            let registry_client = automint_registry::RegistryContractClient::new(&env, &registry);
+            registry_client.add_points(&user, &pending);
+        }
+        env.storage()
+            .persistent()
+            .remove(&DataKey::UserAccrual(user.clone()));
+        env.events().publish((symbol_short!("stopped"), user), pending);
+        Ok(())
     }
 
     pub fn config(env: Env) -> Result<Config, AccrualError> {
@@ -566,12 +625,20 @@ mod test {
     }
 
     #[test]
-    fn test_double_start_accrual_fails() {
+    fn test_double_start_accrual_resyncs_rate() {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
+ 400-402-406-407-accrual-fixes
+        client.start_accrual(&user, &50_u64);
+        let result = client.try_start_accrual(&user, &100_u64);
+        assert!(result.is_ok());
+        env.ledger().with_mut(|ledger| ledger.timestamp += 3600);
+        assert_eq!(client.pending_points(&user), 100);
+
         start_basic(&env, &client, &user);
         let result = client.try_start_accrual(&user);
         assert_eq!(result, Err(Ok(AccrualError::AlreadyStarted)));
+ testnet-implementation
     }
 
     #[test]
