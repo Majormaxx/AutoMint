@@ -100,11 +100,17 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "minter"
                       },
                       "val": {
-                        "string": "Basic Bot"
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "nickname"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -594,11 +600,17 @@
                 },
                 {
                   "key": {
-                    "symbol": "name"
+                    "symbol": "minter"
                   },
                   "val": {
-                    "string": "Basic Bot"
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "nickname"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {

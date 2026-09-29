@@ -37,6 +37,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 }
               ]
             }
@@ -59,9 +62,6 @@
                 },
                 {
                   "u32": 0
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 }
               ]
             }
@@ -165,24 +165,24 @@
                         "key": {
                           "vec": [
                             {
-                              "symbol": "TotalUsers"
+                              "symbol": "TopUsers"
                             }
                           ]
                         },
                         "val": {
-                          "u32": 0
+                          "vec": []
                         }
                       },
                       {
                         "key": {
                           "vec": [
                             {
-                              "symbol": "UserList"
+                              "symbol": "TotalUsers"
                             }
                           ]
                         },
                         "val": {
-                          "vec": []
+                          "u32": 0
                         }
                       }
                     ]
@@ -258,11 +258,17 @@
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "minter"
                       },
                       "val": {
-                        "string": "Basic Bot"
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "nickname"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -503,6 +509,18 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "PaymentToken"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "Registry"
                             }
                           ]
@@ -627,38 +645,6 @@
             "ext": "v0"
           },
           6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-            "key": "ledger_key_contract_instance",
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-                "key": "ledger_key_contract_instance",
-                "durability": "persistent",
-                "val": {
-                  "contract_instance": {
-                    "executable": {
-                      "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-                    },
-                    "storage": null
-                  }
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          4095
         ]
       ],
       [
@@ -822,6 +808,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 }
               ]
             }
@@ -876,9 +865,6 @@
                 },
                 {
                   "u32": 0
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 }
               ]
             }
@@ -908,7 +894,7 @@
             "data": {
               "vec": [
                 {
-                  "bytes": "96a9f35d71d4db5b918eb0958933c9a8b0d590fd94ad5bfca0acc6127ecd21ac"
+                  "bytes": "3ad1aba1b387d9dd3125cd61bbaeec2e7c4c23b9ba1be34830e9983cda85ca7a"
                 },
                 "void",
                 {
@@ -931,9 +917,6 @@
                                   },
                                   {
                                     "u32": 0
-                                  },
-                                  {
-                                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                                   }
                                 ]
                               }
