@@ -143,6 +143,8 @@ pub enum BotNFTError {
     InvalidAmount = 13,
     /// `withdraw` amount exceeds the treasury balance of the payment token.
     InsufficientTreasury = 14,
+    /// The bot id counter has reached `u64::MAX`; no further bot can be minted.
+    Overflow = 15,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -410,7 +412,7 @@ impl BotNFTContract {
         tier: BotTier,
         is_grant: bool,
     ) -> Result<u64, BotNFTError> {
-        let bot_id = Self::get_next_id(env);
+        let bot_id = Self::get_next_id(env)?;
         let (variant, bonus_bps) =
             Self::derive_traits(env, bot_id, env.ledger().timestamp(), owner);
         let stored = StoredBotNFT {
@@ -839,12 +841,13 @@ impl BotNFTContract {
         Ok(bots)
     }
 
-    fn get_next_id(env: &Env) -> u64 {
+    /// Reserve the next bot id. Returns `Overflow` instead of trapping once
+    /// the counter cannot advance, so a mint at the limit fails cleanly.
+    fn get_next_id(env: &Env) -> Result<u64, BotNFTError> {
         let id: u64 = env.storage().instance().get(&DataKey::NextId).unwrap_or(1);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextId, &(id.saturating_add(1)));
-        id
+        let next = id.checked_add(1).ok_or(BotNFTError::Overflow)?;
+        env.storage().instance().set(&DataKey::NextId, &next);
+        Ok(id)
     }
 
     /// Number of bots minted for a given tier (supply tracking).
@@ -2613,5 +2616,69 @@ mod registry_cross_contract_tests {
         env.mock_auths(&[]);
         assert!(client.try_withdraw(&token, &to, &price).is_err());
         assert_eq!(client.treasury_balance(&token), price);
+    }
+}
+
+// ── Issue #335: id counters fail closed instead of trapping ──────────────
+#[cfg(test)]
+mod overflow_tests {
+    use super::*;
+    use automint_testutils::deploy_all;
+    use soroban_sdk::{testutils::Address as _, Env};
+
+    #[test]
+    fn test_mint_basic_at_id_ceiling_returns_overflow_not_panic() {
+        let deployment = deploy_all(Env::default());
+        let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+        let user = Address::generate(&deployment.env);
+        // Seed the counter at the ceiling: the id itself is still assignable,
+        // but the counter cannot advance past it.
+        deployment.env.as_contract(&deployment.bot_nft_id, || {
+            deployment
+                .env
+                .storage()
+                .instance()
+                .set(&DataKey::NextId, &u64::MAX);
+        });
+
+        assert_eq!(client.try_mint_basic(&user), Err(Ok(BotNFTError::Overflow)));
+        // Nothing was minted and the counter is untouched.
+        assert_eq!(client.get_user_bots(&user).len(), 0);
+        assert_eq!(client.next_id(), u64::MAX);
+    }
+
+    #[test]
+    fn test_admin_mint_at_id_ceiling_returns_overflow() {
+        let deployment = deploy_all(Env::default());
+        let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+        let user = Address::generate(&deployment.env);
+        deployment.env.as_contract(&deployment.bot_nft_id, || {
+            deployment
+                .env
+                .storage()
+                .instance()
+                .set(&DataKey::NextId, &u64::MAX);
+        });
+        assert_eq!(
+            client.try_admin_mint(&user, &BotTier::Gold),
+            Err(Ok(BotNFTError::Overflow))
+        );
+        assert_eq!(client.get_user_bots(&user).len(), 0);
+    }
+
+    #[test]
+    fn test_ids_below_the_ceiling_still_mint() {
+        let deployment = deploy_all(Env::default());
+        let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+        let user = Address::generate(&deployment.env);
+        deployment.env.as_contract(&deployment.bot_nft_id, || {
+            deployment
+                .env
+                .storage()
+                .instance()
+                .set(&DataKey::NextId, &(u64::MAX - 1));
+        });
+        assert_eq!(client.mint_basic(&user), u64::MAX - 1);
+        assert_eq!(client.next_id(), u64::MAX);
     }
 }
