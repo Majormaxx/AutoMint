@@ -279,17 +279,20 @@ fn test_buy_bot_pays_seller_minus_fee_and_transfers_bot() {
         .list_bot(&seller, &bot_id, &price, &h.token.address, &604_800_u64);
 
     let seller_balance_before = h.token.balance(&seller);
-    let admin_balance_before = h.token.balance(&h.admin);
+    let admin_balance_before = h.mkt.fees_accrued(&h.token.address);
 
     h.mkt.buy_bot(&buyer, &listing_id);
 
-    // 2.5% fee = 25_0000000, seller gets 975_0000000
+    // 2.5% fee = 25_0000000 accrues in the contract, seller gets 975_0000000
     let fee = price * 25 / 1000;
     assert_eq!(
         h.token.balance(&seller),
         seller_balance_before + price - fee
     );
-    assert_eq!(h.token.balance(&h.admin), admin_balance_before + fee);
+    assert_eq!(
+        h.mkt.fees_accrued(&h.token.address),
+        admin_balance_before + fee
+    );
     assert_eq!(h.token.balance(&buyer), 0);
 
     // Bot transferred to buyer
@@ -594,7 +597,7 @@ fn test_marketplace_token_registry_integration_full_sale_with_updates() {
     // Record balances before purchase
     let seller_balance_before = h.token.balance(&seller);
     let buyer_balance_before = h.token.balance(&buyer);
-    let admin_balance_before = h.token.balance(&h.admin);
+    let admin_balance_before = h.mkt.fees_accrued(&h.token.address);
 
     // Buyer purchases the bot
     h.mkt.buy_bot(&buyer, &listing_id);
@@ -605,7 +608,10 @@ fn test_marketplace_token_registry_integration_full_sale_with_updates() {
         h.token.balance(&seller),
         seller_balance_before + seller_receives
     );
-    assert_eq!(h.token.balance(&h.admin), admin_balance_before + fee);
+    assert_eq!(
+        h.mkt.fees_accrued(&h.token.address),
+        admin_balance_before + fee
+    );
 
     // Verify bot ownership transferred to buyer
     assert_eq!(h.bot.get_bot(&bot_nft_id).owner, buyer);
@@ -1026,9 +1032,9 @@ fn test_fee_always_at_least_one_for_any_accepted_price() {
             .list_bot(&seller, &bot, &price, &h.token.address, &604_800_u64);
         let buyer = Address::generate(&h.env);
         h.token.mint(&buyer, &(price));
-        let admin_before = h.token.balance(&h.admin);
+        let admin_before = h.mkt.fees_accrued(&h.token.address);
         h.mkt.buy_bot(&buyer, &listing);
-        let fee_paid = h.token.balance(&h.admin) - admin_before;
+        let fee_paid = h.mkt.fees_accrued(&h.token.address) - admin_before;
         assert!(
             fee_paid >= 1,
             "fee paid {} for price {} should be >=1",
@@ -1117,9 +1123,9 @@ fn test_fee_boundary_prices() {
         .mkt
         .list_bot(&seller, &bot_ok, &40_i128, &h.token.address, &604_800_u64);
     h.token.mint(&buyer, &40_i128);
-    let admin_before = h.token.balance(&h.admin);
+    let admin_before = h.mkt.fees_accrued(&h.token.address);
     h.mkt.buy_bot(&buyer, &l40);
-    assert_eq!(h.token.balance(&h.admin) - admin_before, 1);
+    assert_eq!(h.mkt.fees_accrued(&h.token.address) - admin_before, 1);
     let seller2 = Address::generate(&h.env);
     let buyer2 = Address::generate(&h.env);
     // No balance needed: the fee multiplication overflows before payment.
@@ -1843,8 +1849,13 @@ fn test_e2e_five_contract_full_flow() {
     );
     assert_eq!(
         token.balance(&admin),
-        admin_bal_before + expected_fee,
-        "admin should receive fee"
+        admin_bal_before,
+        "the fee is retained in the contract, not paid to the admin"
+    );
+    assert_eq!(
+        marketplace.fees_accrued(&token.address),
+        expected_fee,
+        "the fee accrues for withdraw_fees"
     );
     // Total supply check: balances sum to minted + fees? Just check no underflow.
     assert!(token.balance(&bob) >= 0, "bob balance should not underflow");
@@ -2387,16 +2398,21 @@ fn test_buy_conserves_price_and_admin_gets_exact_fee() {
 
     let fee = price * cfg.fee_bps as i128 / 10_000;
     let seller_before = h.token.balance(&seller);
-    let admin_before = h.token.balance(&cfg.admin);
+    let admin_before = h.mkt.fees_accrued(&h.token.address);
     h.mkt.buy_bot(&buyer, &l);
 
-    assert_eq!(h.token.balance(&cfg.admin) - admin_before, fee);
+    assert_eq!(h.mkt.fees_accrued(&h.token.address) - admin_before, fee);
     assert_eq!(
-        (h.token.balance(&seller) - seller_before) + (h.token.balance(&cfg.admin) - admin_before),
+        (h.token.balance(&seller) - seller_before)
+            + (h.mkt.fees_accrued(&h.token.address) - admin_before),
         price
     );
     assert_eq!(h.token.balance(&buyer), 0);
-    assert_eq!(h.token.balance(&h.mkt.address), 0, "no funds stranded");
+    assert_eq!(
+        h.token.balance(&h.mkt.address),
+        fee,
+        "only the accrued fee remains in the contract"
+    );
 }
 
 #[test]
@@ -2565,4 +2581,597 @@ fn test_cancel_cost_does_not_rebuild_index() {
     assert!(!h.mkt.get_listing(&l).active);
     assert_eq!(h.mkt.get_active_listings(&0, &10).0.len(), 0);
     assert_eq!(h.mkt.compact_page(&0), 1);
+}
+
+// ── Issue #425 (offers), #426 (fee withdrawal), #335 (checked counters) ──
+mod offers_and_fees {
+    use super::*;
+    use soroban_sdk::testutils::{Events, Ledger};
+    use soroban_sdk::{Symbol, TryFromVal};
+
+    const PRICE: i128 = 100_0000000;
+    const DAY: u64 = 86_400;
+    const WEEK: u64 = 604_800;
+
+    fn now(h: &Harness) -> u64 {
+        h.env.ledger().timestamp()
+    }
+
+    fn advance(h: &Harness, seconds: u64) {
+        h.env.ledger().with_mut(|l| {
+            l.timestamp += seconds;
+            l.sequence_number += 1;
+        });
+    }
+
+    /// A funded buyer with an open offer on a bot the seller owns outright.
+    fn offer_setup(h: &Harness) -> (Address, Address, u64, u64) {
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        h.token.mint(&buyer, &PRICE);
+        let expires = now(h) + DAY;
+        let offer_id = h
+            .mkt
+            .make_offer(&buyer, &bot_id, &PRICE, &h.token.address, &expires);
+        (seller, buyer, bot_id, offer_id)
+    }
+
+    fn last_event_topic(h: &Harness) -> Symbol {
+        let events = h.env.events().all();
+        let (_, topics, _) = events.last().unwrap();
+        Symbol::try_from_val(&h.env, &topics.get(0).unwrap()).unwrap()
+    }
+
+    // ---- make_offer ----
+
+    #[test]
+    fn make_offer_escrows_the_funds_and_indexes_the_offer() {
+        let h = setup();
+        let (_seller, buyer, bot_id, offer_id) = offer_setup(&h);
+
+        assert_eq!(offer_id, 1);
+        assert_eq!(h.token.balance(&buyer), 0);
+        assert_eq!(h.token.balance(&h.mkt.address), PRICE);
+        let offer = h.mkt.get_offer(&offer_id);
+        assert_eq!(offer.buyer, buyer);
+        assert_eq!(offer.bot_id, bot_id);
+        assert_eq!(offer.amount, PRICE);
+        assert_eq!(offer.status, OfferStatus::Active);
+        let open = h.mkt.get_offers_for_bot(&bot_id);
+        assert_eq!(open.len(), 1);
+        assert_eq!(open.get(0).unwrap().id, offer_id);
+        // Escrow is not fee revenue.
+        assert_eq!(h.mkt.fees_accrued(&h.token.address), 0);
+        assert_eq!(last_event_topic(&h), symbol_short!("offered"));
+    }
+
+    #[test]
+    fn make_offer_ids_are_sequential_and_per_bot_lists_are_ordered() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        let mut ids = std::vec::Vec::new();
+        for _ in 0..3 {
+            let buyer = Address::generate(&h.env);
+            h.token.mint(&buyer, &PRICE);
+            ids.push(
+                h.mkt
+                    .make_offer(&buyer, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY)),
+            );
+        }
+        assert_eq!(ids, std::vec![1, 2, 3]);
+        let open = h.mkt.get_offers_for_bot(&bot_id);
+        assert_eq!(open.len(), 3);
+        assert_eq!(open.get(2).unwrap().id, 3);
+    }
+
+    #[test]
+    fn make_offer_on_own_bot_is_rejected() {
+        let h = setup();
+        let owner = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&owner);
+        h.token.mint(&owner, &PRICE);
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&owner, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY)),
+            Err(Ok(MarketplaceError::OfferOnOwnBot))
+        );
+        assert_eq!(h.token.balance(&owner), PRICE);
+    }
+
+    #[test]
+    fn make_offer_on_own_listed_bot_is_rejected() {
+        let h = setup();
+        let owner = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&owner);
+        h.mkt
+            .list_bot(&owner, &bot_id, &PRICE, &h.token.address, &WEEK);
+        h.token.mint(&owner, &PRICE);
+        // The marketplace holds the bot, but it is the owner's own listing.
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&owner, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY)),
+            Err(Ok(MarketplaceError::OfferOnOwnBot))
+        );
+    }
+
+    #[test]
+    fn make_offer_validates_amount_currency_expiry_and_bot() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        h.token.mint(&buyer, &PRICE);
+        let future = now(&h) + DAY;
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&buyer, &bot_id, &0, &h.token.address, &future),
+            Err(Ok(MarketplaceError::InvalidPrice))
+        );
+        // Default floor for a 2.5% fee is 40 base units.
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&buyer, &bot_id, &39, &h.token.address, &future),
+            Err(Ok(MarketplaceError::PriceTooLow))
+        );
+        let other = Address::generate(&h.env);
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&buyer, &bot_id, &PRICE, &other, &future),
+            Err(Ok(MarketplaceError::UnsupportedCurrency))
+        );
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&buyer, &bot_id, &PRICE, &h.token.address, &now(&h)),
+            Err(Ok(MarketplaceError::InvalidExpiry))
+        );
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&buyer, &999, &PRICE, &h.token.address, &future),
+            Err(Ok(MarketplaceError::BotNotFound))
+        );
+        // Nothing was escrowed by any rejected attempt.
+        assert_eq!(h.token.balance(&buyer), PRICE);
+        assert_eq!(h.mkt.get_offers_for_bot(&bot_id).len(), 0);
+    }
+
+    #[test]
+    fn make_offer_without_funds_fails_with_payment_failed() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&buyer, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY)),
+            Err(Ok(MarketplaceError::PaymentFailed))
+        );
+    }
+
+    #[test]
+    fn make_offer_is_capped_per_bot() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        for _ in 0..MAX_OFFERS_PER_BOT {
+            let buyer = Address::generate(&h.env);
+            h.token.mint(&buyer, &40);
+            h.mkt
+                .make_offer(&buyer, &bot_id, &40, &h.token.address, &(now(&h) + DAY));
+        }
+        let extra = Address::generate(&h.env);
+        h.token.mint(&extra, &40);
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&extra, &bot_id, &40, &h.token.address, &(now(&h) + DAY)),
+            Err(Ok(MarketplaceError::TooManyOffers))
+        );
+        assert_eq!(h.mkt.get_offers_for_bot(&bot_id).len(), MAX_OFFERS_PER_BOT);
+    }
+
+    #[test]
+    fn make_offer_requires_buyer_auth() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        h.token.mint(&buyer, &PRICE);
+        h.env.mock_auths(&[]);
+        assert!(h
+            .mkt
+            .try_make_offer(&buyer, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY))
+            .is_err());
+    }
+
+    // ---- accept_offer ----
+
+    #[test]
+    fn accept_offer_moves_bot_and_funds_atomically() {
+        let h = setup();
+        let (seller, buyer, bot_id, offer_id) = offer_setup(&h);
+        let fee = PRICE * 250 / 10_000;
+
+        h.mkt.accept_offer(&seller, &offer_id);
+
+        assert_eq!(h.bot.get_bot(&bot_id).owner, buyer);
+        // Seller is the minter, so no royalty leaves the payout.
+        assert_eq!(h.token.balance(&seller), PRICE - fee);
+        assert_eq!(h.token.balance(&buyer), 0);
+        assert_eq!(h.mkt.fees_accrued(&h.token.address), fee);
+        assert_eq!(h.token.balance(&h.mkt.address), fee);
+        let offer = h.mkt.get_offer(&offer_id);
+        assert_eq!(offer.status, OfferStatus::Accepted);
+        assert_eq!(h.mkt.get_offers_for_bot(&bot_id).len(), 0);
+        assert_eq!(h.mkt.get_user_purchases(&buyer, &10).len(), 1);
+        assert_eq!(h.mkt.tier_stats(&BotTier::Basic).sale_count, 1);
+        assert_eq!(last_event_topic(&h), symbol_short!("offer_acc"));
+    }
+
+    #[test]
+    fn accept_offer_pays_royalty_to_the_original_minter() {
+        // deploy_all initializes the marketplace with no royalty, so wire a
+        // second marketplace at 2.5% fee / 5% royalty against the same bots.
+        let deployment = deploy_all(Env::default());
+        let env = deployment.env.clone();
+        let bot = BotNFTContractClient::new(&env, &deployment.bot_nft_id);
+        let token = AMTTokenClient::new(&env, &deployment.token_id);
+        let mkt_id = env.register_contract(None, MarketplaceContract);
+        let mkt = MarketplaceContractClient::new(&env, &mkt_id);
+        mkt.initialize(&deployment.admin, &deployment.bot_nft_id, &250u32, &500u32);
+        mkt.add_allowed_currency(&deployment.token_id);
+        let minter = Address::generate(&env);
+        let seller = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let bot_id = bot.mint_basic(&minter);
+        bot.transfer(&bot_id, &minter, &seller);
+        token.mint(&buyer, &PRICE);
+        let expires = env.ledger().timestamp() + DAY;
+        let offer_id = mkt.make_offer(&buyer, &bot_id, &PRICE, &deployment.token_id, &expires);
+
+        mkt.accept_offer(&seller, &offer_id);
+
+        let fee = PRICE * 250 / 10_000;
+        let royalty = PRICE * 500 / 10_000;
+        assert_eq!(token.balance(&minter), royalty);
+        assert_eq!(token.balance(&seller), PRICE - fee - royalty);
+        assert_eq!(mkt.fees_accrued(&deployment.token_id), fee);
+        assert_eq!(token.balance(&mkt_id), fee);
+        assert_eq!(bot.get_bot(&bot_id).owner, buyer);
+    }
+
+    #[test]
+    fn accept_offer_on_a_listed_bot_deactivates_the_listing() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        let listing_id = h
+            .mkt
+            .list_bot(&seller, &bot_id, &(PRICE * 2), &h.token.address, &WEEK);
+        h.token.mint(&buyer, &PRICE);
+        let offer_id =
+            h.mkt
+                .make_offer(&buyer, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY));
+
+        h.mkt.accept_offer(&seller, &offer_id);
+
+        assert_eq!(h.bot.get_bot(&bot_id).owner, buyer);
+        assert!(!h.mkt.get_listing(&listing_id).active);
+        assert_eq!(h.mkt.get_active_listings(&0, &10).0.len(), 0);
+        assert_eq!(h.mkt.get_user_active_listing_count(&seller), 0);
+        assert_eq!(
+            h.mkt.try_get_listing_for_bot(&bot_id),
+            Err(Ok(MarketplaceError::ListingNotFound))
+        );
+        // The listing cannot be bought any more.
+        let other = Address::generate(&h.env);
+        h.token.mint(&other, &(PRICE * 2));
+        assert_eq!(
+            h.mkt.try_buy_bot(&other, &listing_id),
+            Err(Ok(MarketplaceError::ListingNotActive))
+        );
+    }
+
+    #[test]
+    fn accept_offer_by_someone_who_does_not_hold_the_bot_fails() {
+        let h = setup();
+        let (_seller, _buyer, _bot_id, offer_id) = offer_setup(&h);
+        let stranger = Address::generate(&h.env);
+        assert_eq!(
+            h.mkt.try_accept_offer(&stranger, &offer_id),
+            Err(Ok(MarketplaceError::NotBotOwner))
+        );
+    }
+
+    #[test]
+    fn accept_offer_on_a_bot_listed_by_someone_else_fails() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let impostor = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        h.mkt
+            .list_bot(&seller, &bot_id, &PRICE, &h.token.address, &WEEK);
+        h.token.mint(&buyer, &PRICE);
+        let offer_id =
+            h.mkt
+                .make_offer(&buyer, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY));
+        assert_eq!(
+            h.mkt.try_accept_offer(&impostor, &offer_id),
+            Err(Ok(MarketplaceError::NotBotOwner))
+        );
+    }
+
+    #[test]
+    fn accept_offer_rejects_expired_inactive_and_unknown_offers() {
+        let h = setup();
+        let (seller, _buyer, _bot_id, offer_id) = offer_setup(&h);
+        assert_eq!(
+            h.mkt.try_accept_offer(&seller, &999),
+            Err(Ok(MarketplaceError::OfferNotFound))
+        );
+        advance(&h, DAY);
+        assert_eq!(
+            h.mkt.try_accept_offer(&seller, &offer_id),
+            Err(Ok(MarketplaceError::OfferExpired))
+        );
+        // Refund, then the offer is no longer active.
+        h.mkt.cancel_offer(&seller, &offer_id);
+        assert_eq!(
+            h.mkt.try_accept_offer(&seller, &offer_id),
+            Err(Ok(MarketplaceError::OfferNotActive))
+        );
+    }
+
+    #[test]
+    fn accept_offer_twice_fails() {
+        let h = setup();
+        let (seller, _buyer, _bot_id, offer_id) = offer_setup(&h);
+        h.mkt.accept_offer(&seller, &offer_id);
+        assert_eq!(
+            h.mkt.try_accept_offer(&seller, &offer_id),
+            Err(Ok(MarketplaceError::OfferNotActive))
+        );
+    }
+
+    #[test]
+    fn accept_offer_requires_seller_auth() {
+        let h = setup();
+        let (seller, _buyer, _bot_id, offer_id) = offer_setup(&h);
+        h.env.mock_auths(&[]);
+        assert!(h.mkt.try_accept_offer(&seller, &offer_id).is_err());
+    }
+
+    #[test]
+    fn other_offers_on_a_sold_bot_stay_refundable() {
+        let h = setup();
+        let (seller, _buyer, bot_id, offer_id) = offer_setup(&h);
+        let second = Address::generate(&h.env);
+        h.token.mint(&second, &PRICE);
+        let second_id =
+            h.mkt
+                .make_offer(&second, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY));
+        h.mkt.accept_offer(&seller, &offer_id);
+
+        let open = h.mkt.get_offers_for_bot(&bot_id);
+        assert_eq!(open.len(), 1);
+        assert_eq!(open.get(0).unwrap().id, second_id);
+        h.mkt.cancel_offer(&second, &second_id);
+        assert_eq!(h.token.balance(&second), PRICE);
+    }
+
+    // ---- cancel_offer ----
+
+    #[test]
+    fn cancel_offer_refunds_the_buyer_in_full() {
+        let h = setup();
+        let (_seller, buyer, bot_id, offer_id) = offer_setup(&h);
+        h.mkt.cancel_offer(&buyer, &offer_id);
+        assert_eq!(h.token.balance(&buyer), PRICE);
+        assert_eq!(h.token.balance(&h.mkt.address), 0);
+        assert_eq!(h.mkt.get_offer(&offer_id).status, OfferStatus::Cancelled);
+        assert_eq!(h.mkt.get_offers_for_bot(&bot_id).len(), 0);
+        assert_eq!(last_event_topic(&h), symbol_short!("offer_cxl"));
+        assert_eq!(
+            h.mkt.try_cancel_offer(&buyer, &offer_id),
+            Err(Ok(MarketplaceError::OfferNotActive))
+        );
+    }
+
+    #[test]
+    fn cancel_offer_before_expiry_is_buyer_only() {
+        let h = setup();
+        let (seller, buyer, _bot_id, offer_id) = offer_setup(&h);
+        assert_eq!(
+            h.mkt.try_cancel_offer(&seller, &offer_id),
+            Err(Ok(MarketplaceError::NotOfferOwner))
+        );
+        assert_eq!(h.token.balance(&buyer), 0);
+        h.env.mock_auths(&[]);
+        assert!(h.mkt.try_cancel_offer(&buyer, &offer_id).is_err());
+    }
+
+    #[test]
+    fn expired_offer_is_refundable_by_anyone_to_the_buyer() {
+        let h = setup();
+        let (_seller, buyer, _bot_id, offer_id) = offer_setup(&h);
+        advance(&h, DAY);
+        let keeper = Address::generate(&h.env);
+        h.mkt.cancel_offer(&keeper, &offer_id);
+        assert_eq!(h.token.balance(&buyer), PRICE);
+        assert_eq!(h.token.balance(&keeper), 0);
+        assert_eq!(h.mkt.get_offer(&offer_id).status, OfferStatus::Cancelled);
+    }
+
+    #[test]
+    fn pause_blocks_new_offers_and_acceptance_but_not_cancellation() {
+        let h = setup();
+        let (seller, buyer, bot_id, offer_id) = offer_setup(&h);
+        h.mkt.pause();
+        let late = Address::generate(&h.env);
+        h.token.mint(&late, &PRICE);
+        assert_eq!(
+            h.mkt
+                .try_make_offer(&late, &bot_id, &PRICE, &h.token.address, &(now(&h) + DAY)),
+            Err(Ok(MarketplaceError::ContractPaused))
+        );
+        assert_eq!(
+            h.mkt.try_accept_offer(&seller, &offer_id),
+            Err(Ok(MarketplaceError::ContractPaused))
+        );
+        h.mkt.cancel_offer(&buyer, &offer_id);
+        assert_eq!(h.token.balance(&buyer), PRICE);
+    }
+
+    // ---- fees (#426) ----
+
+    #[test]
+    fn buy_bot_accrues_the_fee_instead_of_paying_the_admin() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        let listing_id = h
+            .mkt
+            .list_bot(&seller, &bot_id, &PRICE, &h.token.address, &WEEK);
+        h.token.mint(&buyer, &PRICE);
+        let admin_before = h.token.balance(&h.admin);
+        h.mkt.buy_bot(&buyer, &listing_id);
+        let fee = PRICE * 250 / 10_000;
+        assert_eq!(h.token.balance(&h.admin), admin_before);
+        assert_eq!(h.mkt.fees_accrued(&h.token.address), fee);
+        assert_eq!(h.token.balance(&h.mkt.address), fee);
+    }
+
+    #[test]
+    fn withdraw_fees_pays_out_and_emits_an_event() {
+        let h = setup();
+        let (seller, _buyer, _bot_id, offer_id) = offer_setup(&h);
+        h.mkt.accept_offer(&seller, &offer_id);
+        let fee = PRICE * 250 / 10_000;
+        let treasury = Address::generate(&h.env);
+
+        h.mkt.withdraw_fees(&h.token.address, &treasury, &(fee - 1));
+
+        assert_eq!(h.token.balance(&treasury), fee - 1);
+        assert_eq!(h.mkt.fees_accrued(&h.token.address), 1);
+        let events = h.env.events().all();
+        let (_, topics, data) = events.last().unwrap();
+        let topic: Symbol = Symbol::try_from_val(&h.env, &topics.get(0).unwrap()).unwrap();
+        assert_eq!(topic, symbol_short!("fees_wd"));
+        let (currency, amount, remaining): (Address, i128, i128) =
+            <(Address, i128, i128)>::try_from_val(&h.env, &data).unwrap();
+        assert_eq!(currency, h.token.address);
+        assert_eq!(amount, fee - 1);
+        assert_eq!(remaining, 1);
+        // The rest can go too.
+        h.mkt.withdraw_fees(&h.token.address, &treasury, &1);
+        assert_eq!(h.mkt.fees_accrued(&h.token.address), 0);
+    }
+
+    #[test]
+    fn withdraw_fees_above_the_accrued_balance_fails() {
+        let h = setup();
+        let (seller, _buyer, _bot_id, offer_id) = offer_setup(&h);
+        h.mkt.accept_offer(&seller, &offer_id);
+        let fee = PRICE * 250 / 10_000;
+        let treasury = Address::generate(&h.env);
+        assert_eq!(
+            h.mkt
+                .try_withdraw_fees(&h.token.address, &treasury, &(fee + 1)),
+            Err(Ok(MarketplaceError::InsufficientFees))
+        );
+        assert_eq!(
+            h.mkt.try_withdraw_fees(&h.token.address, &treasury, &0),
+            Err(Ok(MarketplaceError::InvalidAmount))
+        );
+        assert_eq!(
+            h.mkt.try_withdraw_fees(&h.token.address, &treasury, &-1),
+            Err(Ok(MarketplaceError::InvalidAmount))
+        );
+        assert_eq!(h.mkt.fees_accrued(&h.token.address), fee);
+        assert_eq!(h.token.balance(&treasury), 0);
+    }
+
+    #[test]
+    fn escrowed_offer_funds_are_never_withdrawable_as_fees() {
+        let h = setup();
+        let (_seller, _buyer, _bot_id, _offer_id) = offer_setup(&h);
+        // The contract holds PRICE in escrow but has accrued nothing.
+        assert_eq!(h.token.balance(&h.mkt.address), PRICE);
+        assert_eq!(h.mkt.fees_accrued(&h.token.address), 0);
+        let treasury = Address::generate(&h.env);
+        assert_eq!(
+            h.mkt.try_withdraw_fees(&h.token.address, &treasury, &1),
+            Err(Ok(MarketplaceError::InsufficientFees))
+        );
+        // A currency with no activity at all reads as zero too.
+        let other = Address::generate(&h.env);
+        assert_eq!(h.mkt.fees_accrued(&other), 0);
+    }
+
+    #[test]
+    fn withdraw_fees_requires_admin_auth() {
+        let h = setup();
+        let (seller, _buyer, _bot_id, offer_id) = offer_setup(&h);
+        h.mkt.accept_offer(&seller, &offer_id);
+        let treasury = Address::generate(&h.env);
+        h.env.mock_auths(&[]);
+        assert!(h
+            .mkt
+            .try_withdraw_fees(&h.token.address, &treasury, &1)
+            .is_err());
+    }
+
+    // ---- checked counters (#335) ----
+
+    #[test]
+    fn list_bot_at_listing_id_ceiling_returns_overflow_and_keeps_the_bot() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        h.env.as_contract(&h.mkt.address, || {
+            h.env
+                .storage()
+                .instance()
+                .set(&DataKey::NextListingId, &u64::MAX);
+        });
+        assert_eq!(
+            h.mkt
+                .try_list_bot(&seller, &bot_id, &PRICE, &h.token.address, &WEEK),
+            Err(Ok(MarketplaceError::Overflow))
+        );
+        // The failed call rolled back before escrow: seller still owns the bot.
+        assert_eq!(h.bot.get_bot(&bot_id).owner, seller);
+        assert_eq!(h.mkt.next_listing_id(), u64::MAX);
+    }
+
+    #[test]
+    fn sale_count_at_ceiling_returns_overflow() {
+        let h = setup();
+        let (seller, buyer, bot_id, offer_id) = offer_setup(&h);
+        h.env.as_contract(&h.mkt.address, || {
+            h.env.storage().persistent().set(
+                &DataKey::TierStats(BotTier::Basic),
+                &TierStats {
+                    tier: BotTier::Basic,
+                    volume: 0,
+                    sale_count: u64::MAX,
+                    last_sale_price: 0,
+                    floor_price: 0,
+                    floor_listing_id: 0,
+                },
+            );
+        });
+        assert_eq!(
+            h.mkt.try_accept_offer(&seller, &offer_id),
+            Err(Ok(MarketplaceError::Overflow))
+        );
+        // Rolled back: bot and escrow untouched.
+        assert_eq!(h.bot.get_bot(&bot_id).owner, seller);
+        assert_eq!(h.token.balance(&buyer), 0);
+        assert_eq!(h.token.balance(&h.mkt.address), PRICE);
+        assert_eq!(h.mkt.get_offer(&offer_id).status, OfferStatus::Active);
+    }
 }
