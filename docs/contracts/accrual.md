@@ -121,6 +121,30 @@ let points_claimed = accrual_client.claim(&user, &token_id, &registry_id);
 
 ---
 
+### settle
+
+```rust
+pub fn settle(env: Env, users: Vec<Address>) -> Result<u32, AccrualError>
+```
+
+Settle accrued points for up to `MAX_SETTLE_USERS` (25) users in one call, without minting and without any user's signature. For each user it does what `claim` does up to the mint: the points earned since `last_claim_ts` (plus the carried sub-hour remainder) are credited to the Registry's `total_points`, added to `carry_points` and `lifetime_points`, and `last_claim_ts` moves to now. The user's next `claim` then mints from the carried balance, so a settled user ends up with the same points and the same AMT as one who claimed directly.
+
+Users with no accrual record, frozen users, users with nothing pending, and users whose registry credit is refused (a `fail_reg` event names them) are skipped without any change to their state, so one bad address cannot block a batch. Returns the number of users settled and emits `settle(user)` with `(pending, carry_points, lifetime_points)` for each.
+
+**Why it is safe to leave permissionless.** Settling never moves value out of the system and never reduces what a user is owed: the pending amount is a pure function of stored state and the ledger clock, it is credited to the user's own profile, and the only thing a caller decides is *when* the credit is recorded, which `claim` would record identically. Calling it early, late or repeatedly gains nothing (a repeat within the same second credits zero), and every call is bounded by the user cap. What it enables is a keeper refreshing accounts whose persistent entries are approaching TTL expiry, or working through a queue of claims without each user signing.
+
+Errors:
+- `TooManyUsers`: More than 25 addresses were passed.
+- `NotInitialized`: The registry address has not been configured.
+
+Example:
+
+```rust
+let settled = accrual_client.settle(&vec![&env, user_a.clone(), user_b.clone()]);
+```
+
+---
+
 ### admin
 
 ```rust
