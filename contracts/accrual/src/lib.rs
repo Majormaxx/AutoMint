@@ -1163,7 +1163,7 @@ mod test {
         let expected = 1 + gold.accrual_rate;
         assert!((101..=106).contains(&expected));
         env.ledger().with_mut(|l| l.timestamp += HOUR);
-        assert_eq!(client.pending_points(&user), expected as u128);
+        assert_eq!(client.pending_points(&user), expected);
     }
 
     #[test]
