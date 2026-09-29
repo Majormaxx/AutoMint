@@ -72,6 +72,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "leftover"
+                      },
+                      "val": {
+                        "u64": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "lifetime_points"
                       },
                       "val": {
