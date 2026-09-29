@@ -56,6 +56,8 @@ pub enum RegistryError {
     NotRegistered = 4,
     Unauthorized = 5,
     NotInitialized = 6,
+    /// The registered-user counter has reached `u32::MAX`.
+    Overflow = 7,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -154,9 +156,10 @@ impl RegistryContract {
             .instance()
             .get(&DataKey::TotalUsers)
             .unwrap_or(0);
+        let next_total = total.checked_add(1).ok_or(RegistryError::Overflow)?;
         env.storage()
             .instance()
-            .set(&DataKey::TotalUsers, &(total + 1));
+            .set(&DataKey::TotalUsers, &next_total);
 
         // Extend instance storage TTL
         env.storage()
@@ -679,13 +682,20 @@ mod test {
         // Board is full of 10-pointers; a late 10-pointer did not displace anyone.
         let lb = client.get_leaderboard(&LEADERBOARD_SIZE);
         assert_eq!(lb.len(), LEADERBOARD_SIZE);
-        assert!(lb.iter().all(|p| p.address != users[LEADERBOARD_SIZE as usize]));
+        assert!(lb
+            .iter()
+            .all(|p| p.address != users[LEADERBOARD_SIZE as usize]));
         // A late user beating the floor gets in at the top and evicts the last.
         client.add_points(&users[LEADERBOARD_SIZE as usize + 1], &1000_u64);
         let lb = client.get_leaderboard(&LEADERBOARD_SIZE);
-        assert_eq!(lb.get(0).unwrap().address, users[LEADERBOARD_SIZE as usize + 1]);
+        assert_eq!(
+            lb.get(0).unwrap().address,
+            users[LEADERBOARD_SIZE as usize + 1]
+        );
         assert_eq!(lb.len(), LEADERBOARD_SIZE);
-        assert!(lb.iter().all(|p| p.address != users[LEADERBOARD_SIZE as usize - 1]));
+        assert!(lb
+            .iter()
+            .all(|p| p.address != users[LEADERBOARD_SIZE as usize - 1]));
     }
 
     // #332: equal totals rank by who reached the total first.
@@ -1401,5 +1411,54 @@ mod auth_tests {
         }]);
         let result = client.try_decrement_bot_count(&user);
         assert!(result.is_ok());
+    }
+}
+
+// ── Issue #335: the user counter fails closed instead of trapping ────────
+#[cfg(test)]
+mod overflow_tests {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Env, String};
+
+    #[test]
+    fn test_register_at_user_ceiling_returns_overflow_not_panic() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        env.as_contract(&id, || {
+            env.storage()
+                .instance()
+                .set(&DataKey::TotalUsers, &u32::MAX);
+        });
+        let user = Address::generate(&env);
+
+        assert_eq!(
+            client.try_register(&user, &String::from_str(&env, "atlimit")),
+            Err(Ok(RegistryError::Overflow))
+        );
+        // The failed call is rolled back: no profile, counter untouched.
+        assert!(!client.is_registered(&user));
+        assert_eq!(client.total_users(), u32::MAX);
+    }
+
+    #[test]
+    fn test_register_below_ceiling_increments() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        env.as_contract(&id, || {
+            env.storage()
+                .instance()
+                .set(&DataKey::TotalUsers, &(u32::MAX - 1));
+        });
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "lastone"));
+        assert_eq!(client.total_users(), u32::MAX);
     }
 }
