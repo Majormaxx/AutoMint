@@ -8,6 +8,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WASM_DIR="$ROOT_DIR/target/wasm32v1-none/release"
 OUT_BASE="$ROOT_DIR/frontend/src/lib/bindings"
+PLACEHOLDER_CONTRACT_ID="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4"
 
 # Build WASM if not present
 if [[ ! -f "$WASM_DIR/automint_registry.wasm" ]]; then
@@ -31,7 +32,11 @@ for name in "${!CONTRACTS[@]}"; do
     exit 1
   fi
   echo "Generating bindings for $name from $wasm -> $out"
-  stellar contract bindings typescript --wasm "$wasm" --output-dir "$out" --overwrite
+  # stellar-cli 22 (the version CI installs) requires --contract-id even when
+  # generating from a local wasm; the all-zero id is a valid placeholder and
+  # is what the committed bindings carry.
+  stellar contract bindings typescript --wasm "$wasm" --output-dir "$out" --overwrite \
+    --contract-id "$PLACEHOLDER_CONTRACT_ID"
 done
 
 # Patch: add // @ts-nocheck to silence SDK version mismatches (Timepoint, duplicate

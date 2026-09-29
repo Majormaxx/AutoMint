@@ -7,7 +7,7 @@
 
 #![no_std]
 
-use soroban_sdk::{contracttype, contracterror, Address, Env};
+use soroban_sdk::{contracterror, contracttype, Address, Env};
 
 /// TTL bump amount: ~7 days at 5s/ledger
 pub const LEDGER_BUMP: u32 = 120960;
@@ -43,9 +43,7 @@ pub struct AdminStore;
 impl AdminStore {
     /// Initializes admin (should be called during contract initialization)
     pub fn init(env: &Env, admin: &Address) {
-        env.storage()
-            .instance()
-            .set(&CommonDataKey::Admin, admin);
+        env.storage().instance().set(&CommonDataKey::Admin, admin);
     }
 
     /// Gets the current admin address

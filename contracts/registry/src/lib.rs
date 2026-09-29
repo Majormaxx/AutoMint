@@ -679,13 +679,20 @@ mod test {
         // Board is full of 10-pointers; a late 10-pointer did not displace anyone.
         let lb = client.get_leaderboard(&LEADERBOARD_SIZE);
         assert_eq!(lb.len(), LEADERBOARD_SIZE);
-        assert!(lb.iter().all(|p| p.address != users[LEADERBOARD_SIZE as usize]));
+        assert!(lb
+            .iter()
+            .all(|p| p.address != users[LEADERBOARD_SIZE as usize]));
         // A late user beating the floor gets in at the top and evicts the last.
         client.add_points(&users[LEADERBOARD_SIZE as usize + 1], &1000_u64);
         let lb = client.get_leaderboard(&LEADERBOARD_SIZE);
-        assert_eq!(lb.get(0).unwrap().address, users[LEADERBOARD_SIZE as usize + 1]);
+        assert_eq!(
+            lb.get(0).unwrap().address,
+            users[LEADERBOARD_SIZE as usize + 1]
+        );
         assert_eq!(lb.len(), LEADERBOARD_SIZE);
-        assert!(lb.iter().all(|p| p.address != users[LEADERBOARD_SIZE as usize - 1]));
+        assert!(lb
+            .iter()
+            .all(|p| p.address != users[LEADERBOARD_SIZE as usize - 1]));
     }
 
     // #332: equal totals rank by who reached the total first.

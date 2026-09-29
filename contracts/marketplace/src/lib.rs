@@ -159,8 +159,8 @@ pub enum DataKey {
     PendingAdmin,
     TierStats(BotTier),
     BotListing(u64),
-    Locked,  // #326: Reentrancy guard
-    AllowedCurrencies,  // #325: Currency allowlist
+    Locked,            // #326: Reentrancy guard
+    AllowedCurrencies, // #325: Currency allowlist
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -239,9 +239,9 @@ pub enum MarketplaceError {
     NoPendingAdmin = 19,
     BotNotFound = 20,
     NotBotOwner = 21,
-    Reentrancy = 22,  // #326: Reentrancy guard
-    UnsupportedCurrency = 23,  // #325: Currency allowlist
-    ListingExpired = 24,  // #423: listing expiry
+    Reentrancy = 22,          // #326: Reentrancy guard
+    UnsupportedCurrency = 23, // #325: Currency allowlist
+    ListingExpired = 24,      // #423: listing expiry
 }
 
 /// Every bot tier, in order, for per-tier reporting.
@@ -295,9 +295,7 @@ impl MarketplaceContract {
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::NextListingId, &1u64);
         env.storage().instance().set(&DataKey::PageCount, &0u32);
-        env.storage()
-            .instance()
-            .set(&DataKey::ListingCap, &50u32);
+        env.storage().instance().set(&DataKey::ListingCap, &50u32);
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -384,9 +382,9 @@ impl MarketplaceContract {
         }
 
         // duration_secs must be between 1 day and 90 days (#423).
-        const MIN_DURATION: u64 = 86_400;       // 1 day
-        const MAX_DURATION: u64 = 86_400 * 90;  // 90 days
-        if duration_secs < MIN_DURATION || duration_secs > MAX_DURATION {
+        const MIN_DURATION: u64 = 86_400; // 1 day
+        const MAX_DURATION: u64 = 86_400 * 90; // 90 days
+        if !(MIN_DURATION..=MAX_DURATION).contains(&duration_secs) {
             Self::clear_lock(&env);
             return Err(MarketplaceError::InvalidPrice);
         }
@@ -516,9 +514,10 @@ impl MarketplaceContract {
             .set(&DataKey::UserListings(seller.clone()), &user_listings);
 
         let updated_count = user_count + 1;
-        env.storage()
-            .persistent()
-            .set(&DataKey::UserActiveListingCount(seller.clone()), &updated_count);
+        env.storage().persistent().set(
+            &DataKey::UserActiveListingCount(seller.clone()),
+            &updated_count,
+        );
         env.storage().persistent().extend_ttl(
             &DataKey::UserActiveListingCount(seller.clone()),
             LEDGER_THRESHOLD,
@@ -549,7 +548,11 @@ impl MarketplaceContract {
             return Err(e);
         }
         // Order: existence -> authorization -> state validity -> effects.
-        let mut listing: Listing = match env.storage().persistent().get(&DataKey::Listing(listing_id)) {
+        let mut listing: Listing = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(listing_id))
+        {
             Some(l) => l,
             None => {
                 Self::clear_lock(&env);
@@ -768,7 +771,11 @@ impl MarketplaceContract {
 
         seller.require_auth();
 
-        let mut listing: Listing = match env.storage().persistent().get(&DataKey::Listing(listing_id)) {
+        let mut listing: Listing = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(listing_id))
+        {
             Some(l) => l,
             None => {
                 Self::clear_lock(&env);
@@ -843,7 +850,11 @@ impl MarketplaceContract {
     pub fn reclaim_expired(env: Env, listing_id: u64) -> Result<(), MarketplaceError> {
         Self::check_and_set_lock(&env)?;
 
-        let mut listing: Listing = match env.storage().persistent().get(&DataKey::Listing(listing_id)) {
+        let mut listing: Listing = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(listing_id))
+        {
             Some(l) => l,
             None => {
                 Self::clear_lock(&env);
@@ -900,7 +911,11 @@ impl MarketplaceContract {
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         env.events().publish(
-            (Symbol::new(&env, "reclaimed"), listing.seller.clone(), listing_id),
+            (
+                Symbol::new(&env, "reclaimed"),
+                listing.seller.clone(),
+                listing_id,
+            ),
             listing.bot_id,
         );
         Self::clear_lock(&env);
@@ -975,11 +990,7 @@ impl MarketplaceContract {
         config.bot_nft.require_auth();
 
         // O(1): the bot -> active listing index replaces a scan of all ids.
-        let listing_id: u64 = match env
-            .storage()
-            .persistent()
-            .get(&DataKey::BotListing(bot_id))
-        {
+        let listing_id: u64 = match env.storage().persistent().get(&DataKey::BotListing(bot_id)) {
             Some(id) => id,
             None => return Ok(()),
         };
@@ -1331,7 +1342,8 @@ impl MarketplaceContract {
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        env.events().publish((symbol_short!("paused"),), config.admin);
+        env.events()
+            .publish((symbol_short!("paused"),), config.admin);
         Ok(())
     }
 
@@ -1403,16 +1415,12 @@ impl MarketplaceContract {
             .ok_or(MarketplaceError::NotInitialized)?;
         config.admin.require_auth();
 
-        env.storage()
-            .instance()
-            .set(&DataKey::ListingCap, &new_cap);
+        env.storage().instance().set(&DataKey::ListingCap, &new_cap);
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        env.events().publish(
-            (Symbol::new(&env, "listing_cap_upd"),),
-            new_cap,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "listing_cap_upd"),), new_cap);
         Ok(())
     }
 
@@ -1424,11 +1432,7 @@ impl MarketplaceContract {
     }
 
     pub fn bot_nft(env: Env) -> Address {
-        let config: Config = env
-            .storage()
-            .instance()
-            .get(&DataKey::Config)
-            .unwrap();
+        let config: Config = env.storage().instance().get(&DataKey::Config).unwrap();
         config.bot_nft
     }
 
@@ -1654,10 +1658,8 @@ impl MarketplaceContract {
     }
 
     fn is_currency_allowed(env: &Env, currency: &Address) -> bool {
-        let allowed: Option<Vec<Address>> = env
-            .storage()
-            .instance()
-            .get(&DataKey::AllowedCurrencies);
+        let allowed: Option<Vec<Address>> =
+            env.storage().instance().get(&DataKey::AllowedCurrencies);
         if let Some(currencies) = allowed {
             for c in currencies.iter() {
                 if c == *currency {
@@ -1697,10 +1699,8 @@ impl MarketplaceContract {
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        env.events().publish(
-            (Symbol::new(env, "currency_added"),),
-            currency,
-        );
+        env.events()
+            .publish((Symbol::new(env, "currency_added"),), currency);
         Ok(())
     }
 
@@ -1731,10 +1731,8 @@ impl MarketplaceContract {
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        env.events().publish(
-            (Symbol::new(env, "currency_removed"),),
-            currency,
-        );
+        env.events()
+            .publish((Symbol::new(env, "currency_removed"),), currency);
         Ok(())
     }
 
