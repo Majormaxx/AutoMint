@@ -154,6 +154,7 @@ The table below specifies the required authentication signer, verification mecha
 | | `pending_points` | None | Public view | Calculates `(elapsed * rate) / 3600` |
 | | `get_accrual_state` | None | Public view | Queries user's last claim time & points |
 | | `get_accrual_states` | None | Public view | Accrual states for up to 50 users in one call (`None` for unknown users) |
+| | `settle` | Anyone | None (permissionless) | Credits pending points to the registry for up to 25 users without minting; the user still calls `claim` to mint |
 | | `claim` | User | `user.require_auth()` | Claims pending points & triggers mint if >= 100 |
 | | `config` | None | Public view | Returns contract configuration |
 | | `admin` | None | Public view | Returns contract admin address |
@@ -168,6 +169,12 @@ The table below specifies the required authentication signer, verification mecha
 | | `propose_admin` / `accept_admin` | Admin / New admin | `require_auth()` | Two-step admin transfer |
 | | `pause` / `unpause` | Admin | `admin.require_auth()` | Blocks/resumes `list_bot`, `buy_bot`, `update_price`; `cancel_listing` always works |
 | | `tier_stats` / `market_stats` | None | Public view | Per-tier volume, sale count, last sale price and floor |
+| | `make_offer` | Buyer | `buyer.require_auth()` | Escrows the offered amount in the contract; rejected on the buyer's own bot |
+| | `accept_offer` | Seller | `seller.require_auth()` | Moves the bot (from the seller or from their listing escrow) to the buyer and pays out the escrow |
+| | `cancel_offer` | Buyer, or anyone after expiry | `caller.require_auth()` | Refunds the escrow in full to the buyer |
+| | `get_offer` / `get_offers_for_bot` | None | Public view | One offer, or every open offer on a bot |
+| | `withdraw_fees` | Admin | `admin.require_auth()` | Moves accrued fees out; bounded by `fees_accrued`, never touches offer escrow |
+| | `fees_accrued` | None | Public view | Accrued platform fees per currency |
 | | `config` | None | Public view | Returns contract configuration |
 | **AMT Token** | `initialize` | Admin | `admin.require_auth()` | Sets decimals (7), name, symbol, admin |
 | | `allowance` | None | Public view | Returns non-expired allowance amount |
@@ -237,10 +244,14 @@ Soroban provides three storage tiers: **Instance**, **Persistent**, and **Tempor
   - `Config`: `Config { admin: Address, bot_nft: Address, fee_bps: u32 }` (fee_bps = 250 / 2.5%)
   - `Initialized`: `bool`
   - `NextListingId`: `u64`
+  - `NextOfferId`: `u64`
   - `ActiveListings`: `Vec<u64>`
 - **Persistent Storage**:
   - `Listing(u64)` -> `Listing { id: u64, seller: Address, bot_id: u64, bot_tier: BotTier, price: i128, currency: Address, listed_at: u64, active: bool }`
   - `UserListings(Address)` -> `Vec<u64>`
+  - `Offer(u64)` -> `Offer { id: u64, buyer: Address, bot_id: u64, amount: i128, currency: Address, created_at: u64, expires_at: u64, status: OfferStatus }`
+  - `BotOffers(u64)` -> `Vec<u64>` (open offer ids per bot, at most 25)
+  - `Fees(Address)` -> `i128` (accrued platform fees per currency; offer escrow is excluded)
 - **TTL Renewal Policy**: Bumps instance and persistent listing records on `list_bot`, `cancel_listing`, and `buy_bot`.
 
 #### 5. AMT Token Contract (`automint_token`)
@@ -267,9 +278,14 @@ Soroban provides three storage tiers: **Instance**, **Persistent**, and **Tempor
 | **Accrual** | `start` | `user: Address` | `timestamp: u64` | Accrual tracking started |
 | | `mint` | `user: Address` | `amt_to_mint: i128` | AMT tokens minted on claim |
 | | `claim` | `user: Address` | `(pending: u64, remaining: u64)` | Points claimed by user |
+| | `settle` | `user: Address` | `(pending: u64, carry: u64, lifetime: u64)` | Points settled for a user by a permissionless `settle` call |
 | **Marketplace**| `listed` | `seller: Address`, `listing_id: u64` | `(bot_id: u64, price: i128)` | Bot listed for sale |
 | | `cancelled` | `seller: Address`, `listing_id: u64` | `bot_id: u64` | Listing cancelled by seller |
 | | `bought` | `buyer: Address`, `listing_id: u64` | `(bot_id: u64, price: i128)` | Listing purchased by buyer |
+| | `offered` | `buyer: Address`, `offer_id: u64` | `(bot_id: u64, amount: i128, expires_at: u64)` | Offer escrowed |
+| | `offer_acc` | `seller: Address`, `buyer: Address` | `(offer_id: u64, bot_id: u64, amount: i128)` | Offer accepted; bot and funds moved |
+| | `offer_cxl` | `buyer: Address`, `offer_id: u64` | `(bot_id: u64, amount: i128, expired: bool)` | Offer cancelled and refunded |
+| | `fees_wd` | `admin: Address`, `to: Address` | `(currency: Address, amount: i128, remaining: i128)` | Accrued fees withdrawn |
 | **AMT Token** | `approve` | `from: Address`, `spender: Address` | `(amount: i128, expiration: u32)` | Allowance approved |
 | | `transfer` | `from: Address`, `to: Address` | `amount: i128` | Tokens transferred |
 | | `burn` | `from: Address` | `amount: i128` | Tokens burned |
