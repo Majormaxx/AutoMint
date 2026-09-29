@@ -346,7 +346,7 @@ impl AccrualContract {
         Ok(())
     }
 
-    pub fn pending_points(env: Env, user: Address) -> Result<u128, AccrualError> {
+    pub fn pending_points(env: Env, user: Address) -> Result<u64, AccrualError> {
         let accrual: UserAccrual = env
             .storage()
             .persistent()
@@ -510,7 +510,7 @@ impl AccrualContract {
         user: Address,
         token_contract: Address,
         registry: Address,
-    ) -> Result<i128, AccrualError> {
+    ) -> Result<u64, AccrualError> {
         user.require_auth();
         require_unfrozen(&env, &user)?;
 
@@ -557,9 +557,8 @@ impl AccrualContract {
         let updated_accrual = UserAccrual {
             user: accrual.user,
             rate: accrual.rate,
-            last_claim_ts: current_ts,
-            carry_points: remaining_carry,
-            lifetime_points: updated_lifetime,
+            last_claim_ts: next_last_claim_ts,
+            total_claimed_points: remaining_points,
             started_at: accrual.started_at,
             leftover,
         };
@@ -618,10 +617,43 @@ impl AccrualContract {
             (pending, remaining_carry, updated_lifetime),
         );
 
-        // Release the guard on the success path; a failed invocation rolls
-        // the temporary entry back on its own.
-        env.storage().temporary().remove(&DataKey::ReentrancyGuard);
-        Ok(pending as i128)
+        Ok(pending)
+    }
+
+    pub fn set_points_per_amt(env: Env, points_per_amt: u64) -> Result<(), AccrualError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(AccrualError::NotInitialized)?;
+        admin.require_auth();
+
+        if points_per_amt == 0 {
+            return Err(AccrualError::InvalidConfig);
+        }
+
+        let current_config: Config = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(AccrualError::NotInitialized)?;
+        let old_val = current_config.points_per_amt;
+
+        // Bound changes to at most 2x jump in either direction
+        if points_per_amt > old_val.saturating_mul(2) || points_per_amt.saturating_mul(2) < old_val {
+            return Err(AccrualError::InvalidConfig);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Config, &Config { points_per_amt });
+
+        env.events().publish(
+            (symbol_short!("cfg_upd"), admin),
+            (old_val, points_per_amt),
+        );
+
+        Ok(())
     }
 
     pub fn get_accrual_admin(env: Env) -> Result<Address, AccrualError> {

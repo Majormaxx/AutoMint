@@ -913,6 +913,45 @@ export async function getPendingPoints(userAddress: string): Promise<bigint> {
 }
 
 /**
+ * Get the accrual contract configuration (points_per_amt).
+ * Calls the accrual contract's config() function.
+ */
+export async function getAccrualConfig(callerAddress?: string): Promise<{ points_per_amt: bigint } | null> {
+  const server = getServer();
+  const contract = new Contract(ACCRUAL_CONTRACT_ID);
+  const source = callerAddress ?? (typeof window !== "undefined" ? (window as any)?.selectedPublicKey : undefined);
+
+  if (!source) {
+    return { points_per_amt: BigInt(POINTS_PER_AMT) };
+  }
+
+  try {
+    const result = await server.simulateTransaction(
+      new TransactionBuilder(
+        await server.getAccount(source),
+        { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+      )
+        .addOperation(contract.call("config"))
+        .setTimeout(30)
+        .build()
+    );
+
+    if (SorobanRpc.Api.isSimulationError(result) || !result.result?.retval) {
+      return { points_per_amt: BigInt(POINTS_PER_AMT) };
+    }
+
+    const configRaw = scValToNative(result.result.retval);
+    if (!configRaw) return { points_per_amt: BigInt(POINTS_PER_AMT) };
+
+    return {
+      points_per_amt: toBigInt(configRaw.points_per_amt),
+    };
+  } catch {
+    return { points_per_amt: BigInt(POINTS_PER_AMT) };
+  }
+}
+
+/**
  * Claim accrued points, converting them to AMT tokens where the points
  * threshold is met. Calls the accrual contract's claim() function.
  */

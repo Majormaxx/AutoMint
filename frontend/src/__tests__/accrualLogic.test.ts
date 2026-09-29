@@ -29,5 +29,11 @@ describe('Accrual Logic Calculations', () => {
       expect(pointsToAmt(100, 100)).toBe(1);
       expect(pointsToAmt(250, 100)).toBe(2);
     });
+
+    it('asserts points_per_amt constant agrees with deployment default of 100', () => {
+      const { POINTS_PER_AMT } = require('../lib/constants');
+      expect(POINTS_PER_AMT).toBe(100);
+      expect(pointsToAmt(POINTS_PER_AMT, POINTS_PER_AMT)).toBe(1);
+    });
   });
 });
