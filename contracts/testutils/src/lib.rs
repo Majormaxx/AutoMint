@@ -122,7 +122,13 @@ impl DeploymentBuilder {
 
         let accrual_id = env.register_contract(None, AccrualContract);
         let accrual = AccrualContractClient::new(&env, &accrual_id);
-        accrual.initialize(&admin, &bot_nft_id, &registry_id, &token_id, &self.points_per_amt);
+        accrual.initialize(
+            &admin,
+            &bot_nft_id,
+            &registry_id,
+            &token_id,
+            &self.points_per_amt,
+        );
 
         // Mirror `scripts/deploy.sh#wire_token_admin`: the accrual contract is
         // the token admin so `claim` can mint AMT (#417).
@@ -131,6 +137,9 @@ impl DeploymentBuilder {
         let marketplace_id = env.register_contract(None, MarketplaceContract);
         let marketplace = MarketplaceContractClient::new(&env, &marketplace_id);
         marketplace.initialize(&admin, &bot_nft_id, &self.marketplace_fee_bps, &0u32);
+        // Listings and purchases are gated on the currency allowlist (#325);
+        // every suite trades in AMT, so allow it up front.
+        marketplace.add_allowed_currency(&token_id);
 
         Deployment {
             env,

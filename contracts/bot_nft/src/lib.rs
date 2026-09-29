@@ -168,7 +168,12 @@ pub struct BotNFTContract;
 
 #[contractimpl]
 impl BotNFTContract {
-    pub fn initialize(env: Env, admin: Address, registry: Address, payment_token: Address) -> Result<(), BotNFTError> {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        registry: Address,
+        payment_token: Address,
+    ) -> Result<(), BotNFTError> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(BotNFTError::AlreadyInitialized);
         }
@@ -178,13 +183,25 @@ impl BotNFTContract {
         env.storage().instance().set(&DataKey::NextId, &1u64);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Registry, &registry);
-        env.storage().instance().set(&DataKey::PaymentToken, &payment_token);
+        env.storage()
+            .instance()
+            .set(&DataKey::PaymentToken, &payment_token);
 
-        env.storage().instance().set(&DataKey::TierRate(BotTier::Basic), &1u64);
-        env.storage().instance().set(&DataKey::TierRate(BotTier::Bronze), &5u64);
-        env.storage().instance().set(&DataKey::TierRate(BotTier::Silver), &25u64);
-        env.storage().instance().set(&DataKey::TierRate(BotTier::Gold), &100u64);
-        env.storage().instance().set(&DataKey::TierRate(BotTier::Diamond), &500u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::TierRate(BotTier::Basic), &1u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::TierRate(BotTier::Bronze), &5u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::TierRate(BotTier::Silver), &25u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::TierRate(BotTier::Gold), &100u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::TierRate(BotTier::Diamond), &500u64);
 
         env.storage()
             .instance()
@@ -193,14 +210,21 @@ impl BotNFTContract {
     }
 
     pub fn set_accrual(env: Env, accrual: Address) -> Result<(), BotNFTError> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(BotNFTError::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(BotNFTError::NotInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Accrual, &accrual);
         Ok(())
     }
 
     pub fn payment_token(env: Env) -> Result<Address, BotNFTError> {
-        env.storage().instance().get(&DataKey::PaymentToken).ok_or(BotNFTError::NotInitialized)
+        env.storage()
+            .instance()
+            .get(&DataKey::PaymentToken)
+            .ok_or(BotNFTError::NotInitialized)
     }
 
     pub fn set_marketplace(env: Env, marketplace: Address) -> Result<(), BotNFTError> {
@@ -211,7 +235,9 @@ impl BotNFTContract {
             .ok_or(BotNFTError::NotInitialized)?;
         admin.require_auth();
 
-        env.storage().instance().set(&DataKey::Marketplace, &marketplace);
+        env.storage()
+            .instance()
+            .set(&DataKey::Marketplace, &marketplace);
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -238,15 +264,15 @@ impl BotNFTContract {
             return Err(BotNFTError::Unauthorized);
         }
 
-        env.storage().instance().set(&DataKey::TierRate(tier), &rate);
+        env.storage()
+            .instance()
+            .set(&DataKey::TierRate(tier), &rate);
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
-        env.events().publish(
-            (symbol_short!("rate_set"), tier),
-            (old_rate, rate),
-        );
+        env.events()
+            .publish((symbol_short!("rate_set"), tier), (old_rate, rate));
         Ok(())
     }
 
@@ -281,11 +307,7 @@ impl BotNFTContract {
         Self::do_mint(&env, &owner, BotTier::Basic, false)
     }
 
-    pub fn mint_tier(
-        env: Env,
-        owner: Address,
-        tier: Tier,
-    ) -> Result<u64, BotNFTError> {
+    pub fn mint_tier(env: Env, owner: Address, tier: Tier) -> Result<u64, BotNFTError> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(BotNFTError::NotInitialized);
         }
@@ -416,7 +438,9 @@ impl BotNFTContract {
             LEDGER_BUMP,
         );
 
-        env.storage().persistent().set(&DataKey::Bot(bot_id), &stored);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bot(bot_id), &stored);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -440,11 +464,18 @@ impl BotNFTContract {
     }
 
     fn sync_rate(env: &Env, user: &Address) {
-        if let Some(accrual) = env.storage().instance().get::<_, Address>(&DataKey::Accrual) {
+        if let Some(accrual) = env
+            .storage()
+            .instance()
+            .get::<_, Address>(&DataKey::Accrual)
+        {
             let mut args = Vec::new(env);
             args.push_back(user.clone().into_val(env));
             let _ = env.try_invoke_contract::<soroban_sdk::Val, soroban_sdk::Error>(
-                &accrual, &soroban_sdk::Symbol::new(env, "sync_rate"), args);
+                &accrual,
+                &soroban_sdk::Symbol::new(env, "sync_rate"),
+                args,
+            );
         }
     }
 
@@ -469,7 +500,9 @@ impl BotNFTContract {
             variant: bot.variant,
             bonus_bps: bot.bonus_bps,
         };
-        env.storage().persistent().set(&DataKey::Bot(bot_id), &stored);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bot(bot_id), &stored);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -481,7 +514,11 @@ impl BotNFTContract {
         Self::sync_rate(&env, &from);
         Self::sync_rate(&env, &to);
 
-        if let Some(mkt_addr) = env.storage().instance().get::<_, Address>(&DataKey::Marketplace) {
+        if let Some(mkt_addr) = env
+            .storage()
+            .instance()
+            .get::<_, Address>(&DataKey::Marketplace)
+        {
             if to != mkt_addr {
                 let mut args = Vec::new(&env);
                 args.push_back(bot_id.into_val(&env));
@@ -510,10 +547,9 @@ impl BotNFTContract {
         }
 
         let supply = Self::tier_supply(&env, bot.tier);
-        env.storage().persistent().set(
-            &DataKey::TierSupply(bot.tier),
-            &supply.saturating_sub(1),
-        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::TierSupply(bot.tier), &supply.saturating_sub(1));
         env.storage().persistent().extend_ttl(
             &DataKey::TierSupply(bot.tier),
             LEDGER_THRESHOLD,
@@ -540,11 +576,9 @@ impl BotNFTContract {
         if !env.storage().persistent().has(&DataKey::Bot(bot_id)) {
             return Err(BotNFTError::BotNotFound);
         }
-        env.storage().persistent().extend_ttl(
-            &DataKey::Bot(bot_id),
-            LEDGER_THRESHOLD,
-            LEDGER_BUMP,
-        );
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -615,7 +649,11 @@ impl BotNFTContract {
         let stored: StoredBotNFT = match env.storage().persistent().get(&DataKey::Bot(bot_id)) {
             Some(s) => s,
             None => {
-                if let Some(b) = env.storage().persistent().get::<_, BotNFT>(&DataKey::Bot(bot_id)) {
+                if let Some(b) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, BotNFT>(&DataKey::Bot(bot_id))
+                {
                     StoredBotNFT {
                         id: b.id,
                         tier: b.tier,
@@ -633,7 +671,8 @@ impl BotNFTContract {
         };
 
         let base_rate = Self::get_tier_rate_internal(&env, stored.tier);
-        let effective_rate = base_rate.saturating_add(base_rate.saturating_mul(stored.bonus_bps as u64) / 10000);
+        let effective_rate =
+            base_rate.saturating_add(base_rate.saturating_mul(stored.bonus_bps as u64) / 10000);
 
         Ok(BotNFT {
             id: stored.id,
@@ -651,17 +690,19 @@ impl BotNFTContract {
     /// Set or clear the owner-chosen nickname for a bot. Max 24 bytes; pass
     /// an empty string to clear. Only the current owner may rename.
     pub fn rename_bot(env: Env, bot_id: u64, name: String) -> Result<(), BotNFTError> {
-        let mut bot: BotNFT = env
+        let mut stored: StoredBotNFT = env
             .storage()
             .persistent()
             .get(&DataKey::Bot(bot_id))
             .ok_or(BotNFTError::BotNotFound)?;
-        bot.owner.require_auth();
+        stored.owner.require_auth();
         if name.len() > 24 {
             return Err(BotNFTError::NicknameTooLong);
         }
-        bot.nickname = if name.len() == 0 { None } else { Some(name) };
-        env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
+        stored.nickname = if name.is_empty() { None } else { Some(name) };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bot(bot_id), &stored);
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -747,8 +788,55 @@ impl BotNFTContract {
         total
     }
 
-    pub fn get_tier_info(env: Env, tier: BotTier) -> (String, u64, i128) {
-        (tier.name(&env), Self::get_tier_rate_internal(&env, tier), tier.price())
+    pub fn get_tier_info(env: Env, tier: BotTier) -> TierInfo {
+        TierInfo {
+            name: tier.name(&env),
+            rate: Self::get_tier_rate_internal(&env, tier),
+            price: tier.price(),
+        }
+    }
+
+    /// Every tier's descriptor, in tier order (Basic .. Diamond).
+    pub fn all_tiers(env: Env) -> Vec<TierInfo> {
+        let tiers = [
+            BotTier::Basic,
+            BotTier::Bronze,
+            BotTier::Silver,
+            BotTier::Gold,
+            BotTier::Diamond,
+        ];
+        let mut result = Vec::new(&env);
+        for tier in tiers.iter() {
+            result.push_back(TierInfo {
+                name: tier.name(&env),
+                rate: Self::get_tier_rate_internal(&env, *tier),
+                price: tier.price(),
+            });
+        }
+        result
+    }
+
+    /// The next bot id that will be assigned. Callers use it as the exclusive
+    /// upper bound when paginating with `get_bots_range` (#391).
+    pub fn next_id(env: Env) -> u64 {
+        env.storage().instance().get(&DataKey::NextId).unwrap_or(1)
+    }
+
+    /// Up to `limit` existing bots whose ids fall in `[start_id, start_id + limit)`,
+    /// skipping ids with no stored entry (burned or not yet minted). `limit`
+    /// above `MAX_RANGE_LIMIT` (100) returns `RangeLimitExceeded` (#391).
+    pub fn get_bots_range(env: Env, start_id: u64, limit: u32) -> Result<Vec<BotNFT>, BotNFTError> {
+        if limit > MAX_RANGE_LIMIT {
+            return Err(BotNFTError::RangeLimitExceeded);
+        }
+        let mut bots = Vec::new(&env);
+        for offset in 0..limit as u64 {
+            let id = start_id.saturating_add(offset);
+            if let Ok(bot) = Self::get_bot(env.clone(), id) {
+                bots.push_back(bot);
+            }
+        }
+        Ok(bots)
     }
 
     fn get_next_id(env: &Env) -> u64 {
@@ -1031,24 +1119,25 @@ mod test {
         let id = env.register_contract(None, BotNFTContract);
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
+        let payment_token = Address::generate(&env);
         let registry_id = env.register_contract(None, automint_registry::RegistryContract);
         env.mock_auths(&[MockAuth {
             address: &admin,
             invoke: &MockAuthInvoke {
                 contract: &id,
                 fn_name: "initialize",
-                args: (admin.clone(), registry_id.clone()).into_val(&env),
+                args: (admin.clone(), registry_id.clone(), payment_token.clone()).into_val(&env),
                 sub_invokes: &[],
             },
         }]);
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &payment_token);
         // No admin authorization for the subsequent call -> rejected.
         env.mock_auths(&[]);
         let to = Address::generate(&env);
         assert!(client.try_admin_mint(&to, &BotTier::Basic).is_err());
     }
 
-    fn fund_user(env: &Env, token: &Address, user: &Address, amount: i128) {
+    pub(crate) fn fund_user(env: &Env, token: &Address, user: &Address, amount: i128) {
         let token_client = automint_token::AMTTokenClient::new(env, token);
         let _ = token_client.mint(user, &amount);
     }
@@ -1059,8 +1148,8 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
         let id1 = client.mint_basic(&user);
-        let id2 = client.mint_basic(&user);
-        let id3 = client.mint_basic(&user);
+        let id2 = client.admin_mint(&user, &BotTier::Basic);
+        let id3 = client.admin_mint(&user, &BotTier::Basic);
         assert_eq!(id1, 1);
         assert_eq!(id2, 2);
         assert_eq!(id3, 3);
@@ -1072,9 +1161,9 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
         fund_user(&env, &token, &user, 100_000_000_000);
-        let basic_id = client.mint_tier(&user, &Tier::Basic, &token);
-        let advanced_id = client.mint_tier(&user, &Tier::Advanced, &token);
-        let premium_id = client.mint_tier(&user, &Tier::Premium, &token);
+        let basic_id = client.mint_tier(&user, &Tier::Basic);
+        let advanced_id = client.mint_tier(&user, &Tier::Advanced);
+        let premium_id = client.mint_tier(&user, &Tier::Premium);
 
         let basic_bot = client.get_bot(&basic_id);
         let advanced_bot = client.get_bot(&advanced_id);
@@ -1142,8 +1231,8 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
         let id1 = client.mint_basic(&user);
-        let id2 = client.mint_basic(&user);
-        let id3 = client.mint_basic(&user);
+        let id2 = client.admin_mint(&user, &BotTier::Basic);
+        let id3 = client.admin_mint(&user, &BotTier::Basic);
 
         let bots = client.get_user_bots(&user);
         assert_eq!(bots.len(), 3);
@@ -1159,7 +1248,7 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
         let id1 = client.mint_basic(&user);
-        let id2 = client.mint_basic(&user);
+        let id2 = client.admin_mint(&user, &BotTier::Basic);
 
         let detailed = client.get_user_bots_detailed(&user);
         assert_eq!(detailed.len(), 2);
@@ -1208,8 +1297,8 @@ mod test {
         fund_user(&env, &token, &user, 100_000_000_000);
 
         let id1 = client.mint_basic(&user);
-        let id2 = client.mint_tier(&user, &Tier::Advanced, &token);
-        let id3 = client.mint_tier(&user, &Tier::Premium, &token);
+        let id2 = client.mint_tier(&user, &Tier::Advanced);
+        let id3 = client.mint_tier(&user, &Tier::Premium);
 
         // #395: each bot's effective rate includes its deterministic bonus.
         let expected = client.get_bot(&id1).accrual_rate
@@ -1225,7 +1314,7 @@ mod test {
         let admin = Address::generate(&env);
         let registry = Address::generate(&env);
         assert_eq!(
-            client.try_initialize(&admin, &registry),
+            client.try_initialize(&admin, &registry, &Address::generate(&env)),
             Err(Ok(BotNFTError::AlreadyInitialized))
         );
     }
@@ -1268,7 +1357,7 @@ mod test {
         let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
         assert_eq!(reg_client.get_user(&owner).bot_count, 0);
         client.mint_basic(&owner);
-        client.mint_basic(&owner);
+        client.admin_mint(&owner, &BotTier::Basic);
         assert_eq!(reg_client.get_user(&owner).bot_count, 2);
     }
 
@@ -1359,8 +1448,7 @@ mod test {
     #[test]
     fn test_next_id_starts_at_one_before_any_mint() {
         let (_env, _admin, _registry, _token, client) = setup();
-        // setup() mints one bot (id=1), so next_id should be 2.
-        assert_eq!(client.next_id(), 2);
+        assert_eq!(client.next_id(), 1);
     }
 
     #[test]
@@ -1368,11 +1456,12 @@ mod test {
         let (env, _admin, registry, _token, client) = setup();
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
-        // setup() already minted id=1; mint two more.
+        // One free Basic bot per account, so the rest are admin grants.
         client.mint_basic(&user);
-        client.mint_basic(&user);
+        client.admin_mint(&user, &BotTier::Basic);
+        client.admin_mint(&user, &BotTier::Basic);
         // IDs 1, 2, 3 now exist.
-        let bots = client.get_bots_range(&1, &3).unwrap();
+        let bots = client.get_bots_range(&1, &3);
         assert_eq!(bots.len(), 3);
         assert_eq!(bots.get(0).unwrap().id, 1);
         assert_eq!(bots.get(1).unwrap().id, 2);
@@ -1384,10 +1473,11 @@ mod test {
         let (env, _admin, registry, _token, client) = setup();
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
-        client.mint_basic(&user); // id=2
-        client.mint_basic(&user); // id=3
-        // Ask for ids 1..=5; id 4 and 5 don't exist yet — should be silently skipped.
-        let bots = client.get_bots_range(&1, &5).unwrap();
+        client.mint_basic(&user); // id=1
+        client.admin_mint(&user, &BotTier::Basic); // id=2
+        client.admin_mint(&user, &BotTier::Basic); // id=3
+                                                   // Ask for ids 1..=5; id 4 and 5 don't exist yet and are skipped.
+        let bots = client.get_bots_range(&1, &5);
         assert_eq!(bots.len(), 3);
         assert_eq!(bots.get(0).unwrap().id, 1);
         assert_eq!(bots.get(2).unwrap().id, 3);
@@ -1397,7 +1487,7 @@ mod test {
     fn test_get_bots_range_empty_when_no_bots_in_window() {
         let (_env, _admin, _registry, _token, client) = setup();
         // start beyond any minted id.
-        let bots = client.get_bots_range(&1000, &10).unwrap();
+        let bots = client.get_bots_range(&1000, &10);
         assert_eq!(bots.len(), 0);
     }
 
@@ -1600,7 +1690,7 @@ mod test {
 
         let token_client = automint_token::AMTTokenClient::new(&env, &token_id);
         let initial_balance = token_client.balance(&user);
-        let bot_id = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let bot_id = client.mint_tier(&user, &Tier::Basic);
         let final_balance = token_client.balance(&user);
 
         // Basic tier should not charge
@@ -1619,7 +1709,7 @@ mod test {
         // insufficient balance rather than returning a BotNFTError variant, so
         // this surfaces as a host-level invocation error rather than a typed
         // contract error we can match on. Kept as a plain is_err() check.
-        let result = client.try_mint_tier(&user, &Tier::Advanced, &token_id);
+        let result = client.try_mint_tier(&user, &Tier::Advanced);
         assert!(result.is_err());
     }
 
@@ -1629,9 +1719,9 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "testuser");
 
-        let bot1 = client.mint_tier(&user, &Tier::Basic, &token_id);
-        let bot2 = client.mint_tier(&user, &Tier::Basic, &token_id);
-        let bot3 = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let bot1 = client.mint_tier(&user, &Tier::Basic);
+        let bot2 = client.mint_tier(&user, &Tier::Basic);
+        let bot3 = client.mint_tier(&user, &Tier::Basic);
 
         assert_eq!(bot1, 1); // First mint in setup uses id 0
         assert_eq!(bot2, 2);
@@ -1644,7 +1734,7 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "testuser");
 
-        let bot_id = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let bot_id = client.mint_tier(&user, &Tier::Basic);
         let user_bots = client.get_user_bots(&user);
 
         assert_eq!(user_bots.len(), 1);
@@ -1658,15 +1748,15 @@ mod test {
         register_user(&env, &registry, &user, "testuser");
 
         // Mint basic (free)
-        let bot_basic = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let bot_basic = client.mint_tier(&user, &Tier::Basic);
 
         // Fund user and mint advanced
         fund_user(&env, &token_id, &user, 500_0000000);
-        let bot_advanced = client.mint_tier(&user, &Tier::Advanced, &token_id);
+        let bot_advanced = client.mint_tier(&user, &Tier::Advanced);
 
         // Fund user more and mint premium
         fund_user(&env, &token_id, &user, 2000_0000000);
-        let bot_premium = client.mint_tier(&user, &Tier::Premium, &token_id);
+        let bot_premium = client.mint_tier(&user, &Tier::Premium);
 
         let basic_nft = client.get_bot(&bot_basic);
         let advanced_nft = client.get_bot(&bot_advanced);
@@ -1831,7 +1921,10 @@ mod test {
         automint_testutils::advance_past_ttl(&env_expired, LEDGER_BUMP);
         let expired_outcome =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| client.get_bot(&bot_id)));
-        assert!(expired_outcome.is_err(), "expected unbumped entry to be archived");
+        assert!(
+            expired_outcome.is_err(),
+            "expected unbumped entry to be archived"
+        );
 
         // Fresh case: advance near expiry, call bump_bot, advance past original expiry -> still accessible.
         let (env2, _admin, registry2, _token, client2) = setup();
@@ -2022,7 +2115,7 @@ mod auth_tests {
         let admin = Address::generate(&env);
 
         env.mock_auths(&[]);
-        let result = client.try_initialize(&admin, &registry_id);
+        let result = client.try_initialize(&admin, &registry_id, &Address::generate(&env));
         assert!(result.is_err());
     }
 
@@ -2033,17 +2126,18 @@ mod auth_tests {
         let id = env.register_contract(None, BotNFTContract);
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
+        let payment_token = Address::generate(&env);
 
         env.mock_auths(&[MockAuth {
             address: &admin,
             invoke: &MockAuthInvoke {
                 contract: &id,
                 fn_name: "initialize",
-                args: (admin.clone(), registry_id.clone()).into_val(&env),
+                args: (admin.clone(), registry_id.clone(), payment_token.clone()).into_val(&env),
                 sub_invokes: &[],
             },
         }]);
-        let result = client.try_initialize(&admin, &registry_id);
+        let result = client.try_initialize(&admin, &registry_id, &payment_token);
         assert!(result.is_ok());
     }
 
@@ -2055,7 +2149,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
 
         let owner = Address::generate(&env);
         env.mock_auths(&[]);
@@ -2071,7 +2165,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
 
         let owner = Address::generate(&env);
         env.mock_auths(&[MockAuth {
@@ -2095,12 +2189,12 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
 
         let token_id = env.register_contract(None, automint_token::AMTToken);
         let owner = Address::generate(&env);
         env.mock_auths(&[]);
-        let result = client.try_mint_tier(&owner, &Tier::Basic, &token_id);
+        let result = client.try_mint_tier(&owner, &Tier::Basic);
         assert!(result.is_err());
     }
 
@@ -2112,9 +2206,8 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
 
-        let token_id = env.register_contract(None, automint_token::AMTToken);
         let owner = Address::generate(&env);
         // Tier::Basic carries a zero price, so no token transfer is required.
         env.mock_auths(&[MockAuth {
@@ -2122,11 +2215,11 @@ mod auth_tests {
             invoke: &MockAuthInvoke {
                 contract: &id,
                 fn_name: "mint_tier",
-                args: (owner.clone(), Tier::Basic, token_id.clone()).into_val(&env),
+                args: (owner.clone(), Tier::Basic).into_val(&env),
                 sub_invokes: &[],
             },
         }]);
-        let result = client.try_mint_tier(&owner, &Tier::Basic, &token_id);
+        let result = client.try_mint_tier(&owner, &Tier::Basic);
         assert!(result.is_ok());
     }
 
@@ -2138,7 +2231,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
         let owner = Address::generate(&env);
         let bot_id = client.mint_basic(&owner);
 
@@ -2156,7 +2249,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
         let owner = Address::generate(&env);
         let bot_id = client.mint_basic(&owner);
 
@@ -2182,7 +2275,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
 
         let alice = Address::generate(&env);
         let bot_id = client.mint_basic(&alice);
@@ -2207,7 +2300,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
 
         // Base rate for Basic tier is 1, max allowed 2x is 2. Setting to 5 should fail.
         let result = client.try_set_tier_rate(&BotTier::Basic, &5_u64);
@@ -2222,7 +2315,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
         let owner = Address::generate(&env);
         let bot_id = client.mint_basic(&owner);
 
@@ -2239,7 +2332,7 @@ mod auth_tests {
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         env.mock_all_auths();
-        client.initialize(&admin, &registry_id);
+        client.initialize(&admin, &registry_id, &Address::generate(&env));
         let owner = Address::generate(&env);
         let bot_id = client.mint_basic(&owner);
 
@@ -2270,6 +2363,7 @@ mod auth_tests {
 // - the regfail event described in AM-012 is emitted
 #[cfg(test)]
 mod registry_cross_contract_tests {
+    use super::test::{fund_user, setup};
     use super::*;
     use automint_testutils::{deploy_all, register_user};
     use soroban_sdk::{
@@ -2343,8 +2437,10 @@ mod registry_cross_contract_tests {
     fn test_mint_unregistered_owner() {
         let deployment = deploy_all(Env::default());
         let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
-        let reg_client =
-            automint_registry::RegistryContractClient::new(&deployment.env, &deployment.registry_id);
+        let reg_client = automint_registry::RegistryContractClient::new(
+            &deployment.env,
+            &deployment.registry_id,
+        );
         let user = Address::generate(&deployment.env);
 
         // Ensure user is unregistered in registry
@@ -2369,8 +2465,10 @@ mod registry_cross_contract_tests {
     fn test_transfer_registered_to_unregistered() {
         let deployment = deploy_all(Env::default());
         let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
-        let reg_client =
-            automint_registry::RegistryContractClient::new(&deployment.env, &deployment.registry_id);
+        let reg_client = automint_registry::RegistryContractClient::new(
+            &deployment.env,
+            &deployment.registry_id,
+        );
 
         let alice = Address::generate(&deployment.env);
         let bob = Address::generate(&deployment.env);
@@ -2400,8 +2498,10 @@ mod registry_cross_contract_tests {
     fn test_transfer_unregistered_to_registered() {
         let deployment = deploy_all(Env::default());
         let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
-        let reg_client =
-            automint_registry::RegistryContractClient::new(&deployment.env, &deployment.registry_id);
+        let reg_client = automint_registry::RegistryContractClient::new(
+            &deployment.env,
+            &deployment.registry_id,
+        );
 
         let bob = Address::generate(&deployment.env);
         let alice = Address::generate(&deployment.env);
@@ -2437,7 +2537,7 @@ mod registry_cross_contract_tests {
         let id = env.register_contract(None, BotNFTContract);
         let client = BotNFTContractClient::new(&env, &id);
         let admin = Address::generate(&env);
-        client.initialize(&admin, &paused_reg_id);
+        client.initialize(&admin, &paused_reg_id, &Address::generate(&env));
 
         let alice = Address::generate(&env);
 
@@ -2463,7 +2563,7 @@ mod registry_cross_contract_tests {
         register_user(&env, &registry, &user, "user1");
         let price = Tier::Advanced.price();
         fund_user(&env, &token, &user, price);
-        client.mint_tier(&user, &Tier::Advanced, &token);
+        client.mint_tier(&user, &Tier::Advanced);
         assert_eq!(client.treasury_balance(&token), price);
 
         client.withdraw(&token, &to, &price);
@@ -2480,7 +2580,7 @@ mod registry_cross_contract_tests {
         register_user(&env, &registry, &user, "user1");
         let price = Tier::Advanced.price();
         fund_user(&env, &token, &user, price);
-        client.mint_tier(&user, &Tier::Advanced, &token);
+        client.mint_tier(&user, &Tier::Advanced);
 
         assert_eq!(
             client.try_withdraw(&token, &to, &0),
@@ -2507,7 +2607,7 @@ mod registry_cross_contract_tests {
         register_user(&env, &registry, &user, "user1");
         let price = Tier::Advanced.price();
         fund_user(&env, &token, &user, price);
-        client.mint_tier(&user, &Tier::Advanced, &token);
+        client.mint_tier(&user, &Tier::Advanced);
 
         // No auths mocked: admin.require_auth() must fail the call.
         env.mock_auths(&[]);

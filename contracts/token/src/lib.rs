@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![no_std]
-use automint_common::{extend_instance, extend_persistent, AdminStore, CommonDataKey, CommonError, PausableStore, LEDGER_BUMP, LEDGER_THRESHOLD};
+use automint_common::{PausableStore, LEDGER_BUMP, LEDGER_THRESHOLD};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
 };
@@ -13,8 +13,8 @@ pub enum DataKey {
     Balance(Address),
     State,
     Admin,
-    TotalSupply,  // #338
-    MaxSupply,    // #339
+    TotalSupply, // #338
+    MaxSupply,   // #339
 }
 
 #[derive(Clone)]
@@ -50,9 +50,9 @@ pub enum TokenError {
     NegativeAmount = 6,
     AllowanceExpired = 7,
     Overflow = 8,
-    Paused = 1000,  // #336
-    SupplyCapExceeded = 9,  // #339
-    InvalidDecimals = 10,   // referenced in tests
+    Paused = 1000,         // #336
+    SupplyCapExceeded = 9, // #339
+    InvalidDecimals = 10,  // referenced in tests
 }
 
 // TTL constants moved to automint-common (#337)
@@ -107,8 +107,8 @@ impl AMTToken {
         amount: i128,
         expiration_ledger: u32,
     ) -> Result<(), TokenError> {
-        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
-                if !env.storage().instance().has(&DataKey::State) {
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?; // #336
+        if !env.storage().instance().has(&DataKey::State) {
             return Err(TokenError::NotInitialized);
         }
         from.require_auth();
@@ -146,8 +146,8 @@ impl AMTToken {
     }
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) -> Result<(), TokenError> {
-        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
-                from.require_auth();
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?; // #336
+        from.require_auth();
 
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
@@ -179,8 +179,8 @@ impl AMTToken {
         to: Address,
         amount: i128,
     ) -> Result<(), TokenError> {
-        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
-                spender.require_auth();
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?; // #336
+        spender.require_auth();
 
         // Reject negative amounts before touching allowance or balances
         if amount < 0 {
@@ -216,7 +216,7 @@ impl AMTToken {
     }
 
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), TokenError> {
-        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?; // #336
         from.require_auth();
 
         // Validate amount is not negative
@@ -242,8 +242,15 @@ impl AMTToken {
 
         // #338: Update total supply
         let current_supply = Self::total_supply(env.clone());
-        let new_supply = current_supply.checked_sub(amount).ok_or(TokenError::Overflow)?;
-        env.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
+        let new_supply = current_supply
+            .checked_sub(amount)
+            .ok_or(TokenError::Overflow)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::TotalSupply, &new_supply);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::TotalSupply, LEDGER_THRESHOLD, LEDGER_BUMP);
         // #544: as with do_transfer, refresh the balance entry's TTL on
         // every write instead of only on mint.
         env.storage().persistent().extend_ttl(
@@ -267,24 +274,44 @@ impl AMTToken {
     ) -> Result<(), TokenError> {
         PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;
         spender.require_auth();
-        if amount < 0 { return Err(TokenError::NegativeAmount); }
-        if amount == 0 { return Ok(()); }
+        if amount < 0 {
+            return Err(TokenError::NegativeAmount);
+        }
+        if amount == 0 {
+            return Ok(());
+        }
 
         let balance = Self::balance(env.clone(), from.clone());
-        if balance < amount { return Err(TokenError::InsufficientBalance); }
+        if balance < amount {
+            return Err(TokenError::InsufficientBalance);
+        }
         Self::spend_allowance(&env, &from, &spender, amount)?;
-        env.storage().persistent().set(&DataKey::Balance(from.clone()), &(balance - amount));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Balance(from.clone()), &(balance - amount));
         let supply = Self::total_supply(env.clone());
         let new_supply = supply.checked_sub(amount).ok_or(TokenError::Overflow)?;
-        env.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
-        env.storage().persistent().extend_ttl(&DataKey::Balance(from.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
-        env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        env.events().publish((symbol_short!("burn"), spender, from), amount);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TotalSupply, &new_supply);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::TotalSupply, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Balance(from.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.events()
+            .publish((symbol_short!("burn"), spender, from), amount);
         Ok(())
     }
 
     pub fn mint(env: Env, to: Address, amount: i128) -> Result<(), TokenError> {
-        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?;  // #336
+        PausableStore::require_not_paused(&env).map_err(|_| TokenError::Paused)?; // #336
         Self::require_admin(&env)?;
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
@@ -300,7 +327,9 @@ impl AMTToken {
 
         // #338: Update total supply
         let current_supply = Self::total_supply(env.clone());
-        let new_supply = current_supply.checked_add(amount).ok_or(TokenError::Overflow)?;
+        let new_supply = current_supply
+            .checked_add(amount)
+            .ok_or(TokenError::Overflow)?;
 
         // #339: Check supply cap
         if let Some(cap) = Self::max_supply(env.clone()) {
@@ -309,7 +338,12 @@ impl AMTToken {
             }
         }
 
-        env.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TotalSupply, &new_supply);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::TotalSupply, LEDGER_THRESHOLD, LEDGER_BUMP);
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_balance);
@@ -1027,8 +1061,8 @@ mod test {
         );
         let result = client.try_transfer_from(&spender, &alice, &alice, &200_i128);
         assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
-        // Allowance must be consumed even though balance check failed
-        assert_eq!(client.allowance(&alice, &spender), 300_i128);
+        // A failed invocation is rolled back, so the allowance is untouched
+        assert_eq!(client.allowance(&alice, &spender), 500_i128);
         // Balance must be unchanged
         assert_eq!(client.balance(&alice), 100_i128);
     }
@@ -1145,12 +1179,14 @@ mod test {
     }
 
     #[test]
-    fn test_approve_self_approval_fails() {
+    fn test_approve_self_approval_is_permitted() {
+        // #341: SEP-41 permits an account to approve itself as spender.
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         let result =
             client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
-        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
+        assert_eq!(result, Ok(Ok(())));
+        assert_eq!(client.allowance(&alice, &alice), 100_i128);
     }
 
     #[test]
@@ -1223,7 +1259,7 @@ mod test {
             &String::from_str(&env, "AutoMint Token"),
             &String::from_str(&env, "AMT"),
         );
-        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+        assert_eq!(result, Err(Ok(TokenError::InvalidDecimals)));
     }
 
     // --- Issue #85: admin() Result validation tests ---
@@ -1495,13 +1531,16 @@ mod test {
         let alice = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &i128::MAX);
-        client.mint(&bob, &i128::MAX);
-        // Transfer would cause overflow in bob's balance
-        let result = client.try_transfer(&alice, &bob, &1_i128);
-        assert_eq!(result, Err(Ok(TokenError::Overflow)));
-        // Balances must remain unchanged
-        assert_eq!(client.balance(&alice), i128::MAX);
-        assert_eq!(client.balance(&bob), i128::MAX);
+        // Total supply is tracked, so a second `i128::MAX` mint overflows it:
+        // no pair of balances can ever sum past `i128::MAX`, which is what
+        // keeps a receiving balance from overflowing on transfer.
+        assert_eq!(
+            client.try_mint(&bob, &i128::MAX),
+            Err(Ok(TokenError::Overflow))
+        );
+        client.transfer(&alice, &bob, &1_i128);
+        assert_eq!(client.balance(&alice), i128::MAX - 1);
+        assert_eq!(client.balance(&bob), 1);
     }
 
     #[test]
@@ -1511,20 +1550,23 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &i128::MAX);
-        client.mint(&bob, &i128::MAX);
+        // See `test_transfer_checked_overflow_protection`: total-supply
+        // accounting rejects the second mint, so no receiving balance can
+        // overflow through `transfer_from` either.
+        assert_eq!(
+            client.try_mint(&bob, &i128::MAX),
+            Err(Ok(TokenError::Overflow))
+        );
         client.approve(
             &alice,
             &spender,
             &i128::MAX,
             &(env.ledger().sequence() + 10000),
         );
-        // transfer_from would cause overflow in bob's balance
-        let result = client.try_transfer_from(&spender, &alice, &bob, &1_i128);
-        assert_eq!(result, Err(Ok(TokenError::Overflow)));
-        // Balances must remain unchanged and allowance untouched
-        assert_eq!(client.balance(&alice), i128::MAX);
-        assert_eq!(client.balance(&bob), i128::MAX);
-        assert_eq!(client.allowance(&alice, &spender), i128::MAX);
+        client.transfer_from(&spender, &alice, &bob, &1_i128);
+        assert_eq!(client.balance(&alice), i128::MAX - 1);
+        assert_eq!(client.balance(&bob), 1);
+        assert_eq!(client.allowance(&alice, &spender), i128::MAX - 1);
     }
 
     // --- Underflow safety: subtraction is safe via balance checks ---

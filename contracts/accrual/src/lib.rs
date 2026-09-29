@@ -2,8 +2,8 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address, Env,
-    Vec, IntoVal,
+    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address,
+    Env, IntoVal, Vec,
 };
 
 /// The one bot_nft entry point accrual calls. Declared locally rather than
@@ -13,6 +13,26 @@ use soroban_sdk::{
 #[contractclient(name = "BotNftClient")]
 pub trait BotNftInterface {
     fn get_user_total_rate(env: Env, user: Address) -> u64;
+}
+
+/// The registry entry points accrual calls, declared locally for the same
+/// reason as `BotNftInterface`: depending on `automint-registry` links the
+/// registry's exported functions (`initialize`, ...) into this wasm and the
+/// linker rejects the duplicate symbols. Return types are the unit type so a
+/// typed error from the callee surfaces through `try_*` as
+/// `soroban_sdk::Error`, whose code is the callee's error discriminant.
+#[contractclient(name = "RegistryClient")]
+pub trait RegistryInterface {
+    fn is_registered(env: Env, user: Address) -> bool;
+    fn add_points(env: Env, user: Address, points: u64);
+    fn add_claimed_amt(env: Env, user: Address, amount: i128);
+}
+
+/// The token entry points accrual calls; see `RegistryInterface`.
+#[contractclient(name = "TokenClient")]
+pub trait TokenInterface {
+    fn mint(env: Env, to: Address, amount: i128);
+    fn decimals(env: Env) -> u32;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -34,6 +54,8 @@ pub enum DataKey {
     BotNft,
     Registry,
     UserAccrual(Address),
+    /// Set by the admin to block a user's accrual actions (#413).
+    Frozen(Address),
     ReentrancyGuard,
 }
 
@@ -97,28 +119,18 @@ pub enum AccrualError {
     Frozen = 12,
 }
 
-fn get_reg_err_code(
+/// Error code carried by a failed cross-contract call: `0` on success, the
+/// callee's `#[contracterror]` discriminant on a typed failure, `999` when the
+/// invocation itself failed (missing contract, trap, conversion error).
+fn invoke_err_code(
     res: &Result<
         Result<(), soroban_sdk::ConversionError>,
-        Result<automint_registry::RegistryError, soroban_sdk::InvokeError>,
+        Result<soroban_sdk::Error, soroban_sdk::InvokeError>,
     >,
 ) -> u32 {
     match res {
         Ok(Ok(())) => 0,
-        Err(Ok(e)) => *e as u32,
-        _ => 999,
-    }
-}
-
-fn get_token_err_code(
-    res: &Result<
-        Result<(), soroban_sdk::ConversionError>,
-        Result<automint_token::TokenError, soroban_sdk::InvokeError>,
-    >,
-) -> u32 {
-    match res {
-        Ok(Ok(())) => 0,
-        Err(Ok(e)) => *e as u32,
+        Err(Ok(e)) => e.get_code(),
         _ => 999,
     }
 }
@@ -178,22 +190,29 @@ impl AccrualContract {
 
         // Read the token's decimal count and derive the scale factor (#410).
         // Cached here so claim() never needs a cross-contract call for it.
-        let decimals: u32 = automint_token::AMTTokenClient::new(&env, &token)
+        let decimals: u32 = TokenClient::new(&env, &token)
             .try_decimals()
             .ok()
             .and_then(|r| r.ok())
             .unwrap_or(7);
         let amt_scale: i128 = 10_i128.pow(decimals);
 
-        env.storage()
-            .instance()
-            .set(&DataKey::Config, &Config { points_per_amt, amt_scale });
+        env.storage().instance().set(
+            &DataKey::Config,
+            &Config {
+                points_per_amt,
+                amt_scale,
+            },
+        );
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         let mut args = Vec::new(&env);
         args.push_back(env.current_contract_address().into_val(&env));
         let _ = env.try_invoke_contract::<(), soroban_sdk::Error>(
-            &bot_nft, &soroban_sdk::Symbol::new(&env, "set_accrual"), args);
+            &bot_nft,
+            &soroban_sdk::Symbol::new(&env, "set_accrual"),
+            args,
+        );
 
         env.storage()
             .instance()
@@ -207,22 +226,30 @@ impl AccrualContract {
         env.storage()
             .persistent()
             .set(&DataKey::Frozen(user.clone()), &true);
-        env.storage()
-            .persistent()
-            .extend_ttl(&DataKey::Frozen(user.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Frozen(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.events().publish((symbol_short!("freeze"), user), true);
         Ok(())
     }
 
     pub fn unfreeze(env: Env, user: Address) -> Result<(), AccrualError> {
         require_admin(&env)?;
-        env.storage().persistent().remove(&DataKey::Frozen(user.clone()));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Frozen(user.clone()));
         env.events().publish((symbol_short!("freeze"), user), false);
         Ok(())
     }
     pub fn sync_rate(env: Env, user: Address) -> Result<u64, AccrualError> {
         require_unfrozen(&env, &user)?;
-        let Some(mut accrual) = env.storage().persistent().get::<_, UserAccrual>(&DataKey::UserAccrual(user.clone())) else {
+        let Some(mut accrual) = env
+            .storage()
+            .persistent()
+            .get::<_, UserAccrual>(&DataKey::UserAccrual(user.clone()))
+        else {
             return Ok(0);
         };
         let now = env.ledger().timestamp();
@@ -231,10 +258,20 @@ impl AccrualContract {
         accrual.carry_points = accrual.carry_points.saturating_add(settled);
         accrual.lifetime_points = accrual.lifetime_points.saturating_add(settled);
         accrual.last_claim_ts = now;
-        let bot_nft: Address = env.storage().instance().get(&DataKey::BotNft).ok_or(AccrualError::NotInitialized)?;
+        let bot_nft: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::BotNft)
+            .ok_or(AccrualError::NotInitialized)?;
         accrual.rate = BotNftClient::new(&env, &bot_nft).get_user_total_rate(&user);
-        env.storage().persistent().set(&DataKey::UserAccrual(user.clone()), &accrual);
-        env.storage().persistent().extend_ttl(&DataKey::UserAccrual(user), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAccrual(user.clone()), &accrual);
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserAccrual(user),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         Ok(settled)
     }
 
@@ -247,6 +284,13 @@ impl AccrualContract {
     pub fn start_accrual(env: Env, user: Address) -> Result<(), AccrualError> {
         user.require_auth();
         let now = env.ledger().timestamp();
+        let bot_nft: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::BotNft)
+            .ok_or(AccrualError::NotInitialized)?;
+        let rate = BotNftClient::new(&env, &bot_nft).get_user_total_rate(&user);
+        // A second start is a rate re-sync, not an error.
         if let Some(mut accrual) = env
             .storage()
             .persistent()
@@ -256,6 +300,11 @@ impl AccrualContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::UserAccrual(user.clone()), &accrual);
+            env.storage().persistent().extend_ttl(
+                &DataKey::UserAccrual(user.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
             env.events().publish((symbol_short!("sync"), user), rate);
             return Ok(());
         }
@@ -264,33 +313,21 @@ impl AccrualContract {
             .instance()
             .get(&DataKey::Registry)
             .ok_or(AccrualError::NotInitialized)?;
-        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+        let reg_client = RegistryClient::new(&env, &registry);
         if !reg_client.is_registered(&user) {
             return Err(AccrualError::NotRegistered);
         }
-        let bot_nft: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::BotNft)
-            .ok_or(AccrualError::NotInitialized)?;
-        let rate = BotNftClient::new(&env, &bot_nft).get_user_total_rate(&user);
         if rate == 0 {
             return Err(AccrualError::NoBots);
         }
         let accrual = UserAccrual {
             user: user.clone(),
             rate,
- 400-402-406-407-accrual-fixes
             last_claim_ts: now,
-            total_claimed_points: 0,
-            started_at: now,
-            leftover: 0,
-
-            last_claim_ts: env.ledger().timestamp(),
             carry_points: 0,
             lifetime_points: 0,
-            started_at: env.ledger().timestamp(),
- testnet-implementation
+            started_at: now,
+            leftover: 0,
         };
         env.storage()
             .persistent()
@@ -300,10 +337,8 @@ impl AccrualContract {
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
-        env.events().publish(
-            (symbol_short!("start"), user.clone()),
-            now,
-        );
+        env.events()
+            .publish((symbol_short!("start"), user.clone()), now);
         Ok(())
     }
 
@@ -316,8 +351,13 @@ impl AccrualContract {
         let elapsed = env
             .ledger()
             .timestamp()
-            .saturating_sub(accrual.last_claim_ts) as u128;
-        Ok((elapsed.saturating_mul(accrual.rate as u128) + accrual.leftover as u128) / 3600)
+            .saturating_sub(accrual.last_claim_ts);
+        // Same arithmetic as `claim` and `settle`: whole points plus the carried
+        // sub-hour remainder, saturating like they do.
+        Ok(elapsed
+            .saturating_mul(accrual.rate)
+            .saturating_add(accrual.leftover)
+            / 3600)
     }
 
     /// Seconds until the next AMT token will be earned. Returns 0 if the user
@@ -340,9 +380,7 @@ impl AccrualContract {
             return Ok(0);
         }
 
-        let points_needed = config
-            .points_per_amt
-            .saturating_sub(accrual.carry_points);
+        let points_needed = config.points_per_amt.saturating_sub(accrual.carry_points);
 
         if points_needed == 0 {
             return Ok(0);
@@ -386,7 +424,9 @@ impl AccrualContract {
         if env.storage().temporary().has(&DataKey::ReentrancyGuard) {
             return Ok(0);
         }
-        env.storage().temporary().set(&DataKey::ReentrancyGuard, &true);
+        env.storage()
+            .temporary()
+            .set(&DataKey::ReentrancyGuard, &true);
 
         let accrual: UserAccrual = env
             .storage()
@@ -414,22 +454,19 @@ impl AccrualContract {
         // Number of AMT tokens to mint
         let amt_to_mint = updated_carry / config.points_per_amt;
 
- 400-402-406-407-accrual-fixes
-        // Carry forward points below the mint threshold and fractional accrual.
-        let remaining_points = updated_points % config.points_per_amt;
-
-        // Carry forward only leftover points
+        // Carry forward only the points below the mint threshold; the
+        // sub-hour remainder of the accrual is carried in `leftover`.
         let remaining_carry = updated_carry % config.points_per_amt;
 
         // Lifetime points accumulation
         let updated_lifetime = accrual.lifetime_points.saturating_add(pending);
- testnet-implementation
 
         let updated_accrual = UserAccrual {
             user: accrual.user,
             rate: accrual.rate,
-            last_claim_ts: next_last_claim_ts,
-            total_claimed_points: remaining_points,
+            last_claim_ts: current_ts,
+            carry_points: remaining_carry,
+            lifetime_points: updated_lifetime,
             started_at: accrual.started_at,
             leftover,
         };
@@ -437,18 +474,18 @@ impl AccrualContract {
             .persistent()
             .set(&DataKey::UserAccrual(user.clone()), &updated_accrual);
 
-        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+        let reg_client = RegistryClient::new(&env, &registry);
 
         let reg_res = reg_client.try_add_points(&user, &pending);
         if reg_res.is_err() || matches!(&reg_res, Ok(Err(_))) {
-            let code = get_reg_err_code(&reg_res);
+            let code = invoke_err_code(&reg_res);
             env.events()
                 .publish((symbol_short!("fail_reg"), user.clone()), code);
             return Err(AccrualError::RegistryCallFailed);
         }
 
         if amt_to_mint > 0 {
-            let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
+            let token_client = TokenClient::new(&env, &token_contract);
 
             // Scale by token decimals so minting "1 AMT" = 10^decimals base units (#410).
             let mint_amount = (amt_to_mint as i128)
@@ -456,7 +493,7 @@ impl AccrualContract {
                 .unwrap_or(amt_to_mint as i128);
             let mint_res = token_client.try_mint(&user, &mint_amount);
             if mint_res.is_err() || matches!(&mint_res, Ok(Err(_))) {
-                let code = get_token_err_code(&mint_res);
+                let code = invoke_err_code(&mint_res);
                 env.events()
                     .publish((symbol_short!("fail_mint"), user.clone()), code);
                 return Err(AccrualError::TokenMintFailed);
@@ -464,7 +501,7 @@ impl AccrualContract {
 
             let claimed_res = reg_client.try_add_claimed_amt(&user, &(amt_to_mint as i128));
             if claimed_res.is_err() || matches!(&claimed_res, Ok(Err(_))) {
-                let code = get_reg_err_code(&claimed_res);
+                let code = invoke_err_code(&claimed_res);
                 env.events()
                     .publish((symbol_short!("fail_reg"), user.clone()), code);
                 return Err(AccrualError::RegistryCallFailed);
@@ -488,6 +525,9 @@ impl AccrualContract {
             (pending, remaining_carry, updated_lifetime),
         );
 
+        // Release the guard on the success path; a failed invocation rolls
+        // the temporary entry back on its own.
+        env.storage().temporary().remove(&DataKey::ReentrancyGuard);
         Ok(pending)
     }
 
@@ -511,18 +551,21 @@ impl AccrualContract {
         let old_val = current_config.points_per_amt;
 
         // Bound changes to at most 2x jump in either direction
-        if points_per_amt > old_val.saturating_mul(2) || points_per_amt.saturating_mul(2) < old_val {
+        if points_per_amt > old_val.saturating_mul(2) || points_per_amt.saturating_mul(2) < old_val
+        {
             return Err(AccrualError::InvalidConfig);
         }
 
-        env.storage()
-            .instance()
-            .set(&DataKey::Config, &Config { points_per_amt });
-
-        env.events().publish(
-            (symbol_short!("cfg_upd"), admin),
-            (old_val, points_per_amt),
+        env.storage().instance().set(
+            &DataKey::Config,
+            &Config {
+                points_per_amt,
+                amt_scale: current_config.amt_scale,
+            },
         );
+
+        env.events()
+            .publish((symbol_short!("cfg_upd"), admin), (old_val, points_per_amt));
 
         Ok(())
     }
@@ -534,11 +577,7 @@ impl AccrualContract {
             .ok_or(AccrualError::NotInitialized)
     }
 
-    pub fn stop_accrual(
-        env: Env,
-        user: Address,
-        registry: Address,
-    ) -> Result<(), AccrualError> {
+    pub fn stop_accrual(env: Env, user: Address, registry: Address) -> Result<(), AccrualError> {
         user.require_auth();
         let accrual: UserAccrual = env
             .storage()
@@ -552,13 +591,13 @@ impl AccrualContract {
             .saturating_add(accrual.leftover);
         let pending = total_numerator / 3600;
         if pending > 0 {
-            let registry_client = automint_registry::RegistryContractClient::new(&env, &registry);
-            registry_client.add_points(&user, &pending);
+            RegistryClient::new(&env, &registry).add_points(&user, &pending);
         }
         env.storage()
             .persistent()
             .remove(&DataKey::UserAccrual(user.clone()));
-        env.events().publish((symbol_short!("stopped"), user), pending);
+        env.events()
+            .publish((symbol_short!("stopped"), user), pending);
         Ok(())
     }
 
@@ -616,8 +655,7 @@ mod test {
         )
     }
 
-    static NEXT_AUTO_NAME: std::sync::atomic::AtomicU64 =
-        std::sync::atomic::AtomicU64::new(0);
+    static NEXT_AUTO_NAME: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
     /// Registers `user` (if not already), mints a free Basic bot (rate 1)
     /// for them, and starts their accrual.
@@ -727,17 +765,12 @@ mod test {
     fn test_double_start_accrual_resyncs_rate() {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
- 400-402-406-407-accrual-fixes
-        client.start_accrual(&user, &50_u64);
-        let result = client.try_start_accrual(&user, &100_u64);
-        assert!(result.is_ok());
-        env.ledger().with_mut(|ledger| ledger.timestamp += 3600);
-        assert_eq!(client.pending_points(&user), 100);
-
         start_basic(&env, &client, &user);
+        // A second start is not an error: it re-syncs the rate from bot_nft.
         let result = client.try_start_accrual(&user);
-        assert_eq!(result, Err(Ok(AccrualError::AlreadyStarted)));
- testnet-implementation
+        assert_eq!(result, Ok(Ok(())));
+        env.ledger().with_mut(|ledger| ledger.timestamp += 3600);
+        assert_eq!(client.pending_points(&user), 1);
     }
 
     #[test]
@@ -1101,6 +1134,7 @@ mod test {
                     carry_points: 0,
                     lifetime_points: 0,
                     started_at: 0,
+                    leftover: 0,
                 },
             );
         });
@@ -1229,7 +1263,7 @@ mod test {
         let pending = accrual.claim(&user, &token, &registry);
         assert_eq!(pending, 100);
         // 100 / 100 = 1 AMT minted, carry fully consumed.
-        assert_eq!(token_client.balance(&user), 1);
+        assert_eq!(token_client.balance(&user), 10_000_000);
         let state = accrual.get_accrual_state(&user).unwrap();
         assert_eq!(state.carry_points, 0);
         assert_eq!(state.lifetime_points, 100);
@@ -1251,7 +1285,7 @@ mod test {
 
         let pending = accrual.claim(&user, &token, &registry);
         assert_eq!(pending, 101);
-        assert_eq!(token_client.balance(&user), 1);
+        assert_eq!(token_client.balance(&user), 10_000_000);
         let state = accrual.get_accrual_state(&user).unwrap();
         assert_eq!(state.carry_points, 1);
         assert_eq!(state.lifetime_points, 101);
@@ -1273,7 +1307,7 @@ mod test {
 
         let pending = accrual.claim(&user, &token, &registry);
         assert_eq!(pending, 350);
-        assert_eq!(token_client.balance(&user), 3);
+        assert_eq!(token_client.balance(&user), 30_000_000);
         let state = accrual.get_accrual_state(&user).unwrap();
         assert_eq!(state.carry_points, 50);
         assert_eq!(state.lifetime_points, 350);
@@ -1306,7 +1340,7 @@ mod test {
             l.sequence_number += 1;
         });
         assert_eq!(accrual.claim(&user, &token, &registry), 30);
-        assert_eq!(token_client.balance(&user), 1);
+        assert_eq!(token_client.balance(&user), 10_000_000);
         let state = accrual.get_accrual_state(&user).unwrap();
         assert_eq!(state.carry_points, 10);
         assert_eq!(state.lifetime_points, 110);
@@ -1397,6 +1431,7 @@ mod test {
                     carry_points: 0,
                     lifetime_points: 0,
                     started_at: env.ledger().timestamp(),
+                    leftover: 0,
                 },
             );
         });
@@ -1483,7 +1518,7 @@ mod auth_tests {
             &String::from_str(&env, "AutoMint Token"),
             &String::from_str(&env, "AMT"),
         );
-        bot_nft.initialize(&admin, &registry_id);
+        bot_nft.initialize(&admin, &registry_id, &token_id);
         client.initialize(&admin, &bot_nft_id, &registry_id, &token_id, &100_u64);
 
         Ctx {
@@ -1525,7 +1560,13 @@ mod auth_tests {
             invoke: &MockAuthInvoke {
                 contract: &id,
                 fn_name: "initialize",
-                args: (admin.clone(), bot_nft.clone(), registry.clone(), token.clone(), 100_u64)
+                args: (
+                    admin.clone(),
+                    bot_nft.clone(),
+                    registry.clone(),
+                    token.clone(),
+                    100_u64,
+                )
                     .into_val(&env),
                 sub_invokes: &[],
             },
